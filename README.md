@@ -2,6 +2,8 @@
 
 > **Research proposal.** A learned, adversarially trained aggregation rule for resilient distributed optimization that keeps the safety guarantees of Local Filtering (LF) by construction.
 
+> **Implementation progress:** see [IMPLEMENTATION.md](IMPLEMENTATION.md) for what has been built, validation results, and next steps.
+
 ## Contents
 
 1. [Summary](#1-summary)
