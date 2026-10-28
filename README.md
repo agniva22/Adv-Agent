@@ -223,7 +223,7 @@ flowchart TD
 <details open>
 <summary><b>Phase 8 — Paper</b></summary>
 
-- Write up and release the code. Venue options: IEEE TAC or L-CSS with CDC on the control side; AAMAS or NeurIPS on the learning side.
+- Write up and release the code.
 </details>
 
 ## 7. Experimental Design
