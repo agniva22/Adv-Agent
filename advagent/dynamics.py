@@ -117,12 +117,18 @@ def simulate(adj, funcs, x0, rule, T, alpha, adversaries=(), attack=None, seed=0
     regular[adv] = False
     reg_idx = np.flatnonzero(regular)
     rng = np.random.default_rng(seed)
-    ctx = {"adj": adj, "adv": adv, "regular": regular, "funcs": funcs, "rng": rng, "rule": rule}
     nbrs = [np.flatnonzero(adj[i]) for i in range(n)]
+    ctx = {"adj": adj, "adv": adv, "regular": regular, "funcs": funcs, "rng": rng, "rule": rule,
+           "nbrs": nbrs, "t": 0}
+    if hasattr(rule, "reset"):
+        rule.reset(ctx)
+    # Gradient at the consensus point y_i as in [1]; Su-Vaidya [5] uses x_i(t).
+    grad_at_own = getattr(rule, "grad_at_own", False)
 
     X = np.empty((T + 1, n))
     X[0] = x0
     for t in range(T):
+        ctx["t"] = t
         x = X[t]
         recv = np.broadcast_to(x, (n, n)).copy()  # recv[i, j]: value i gets from j
         if adv.size:
@@ -130,6 +136,7 @@ def simulate(adj, funcs, x0, rule, T, alpha, adversaries=(), attack=None, seed=0
             recv[:, adv] = sent if sent.ndim == 2 else np.broadcast_to(sent, (n, adv.size))
             X[t + 1, adv] = sent if sent.ndim == 1 else sent.mean(axis=0)
         y = np.array([rule.aggregate(i, x[i], recv[i, nbrs[i]], ctx) for i in reg_idx])
-        X[t + 1, reg_idx] = y - alpha(t) * funcs.grad(y, reg_idx)
+        g_at = x[reg_idx] if grad_at_own else y
+        X[t + 1, reg_idx] = y - alpha(t) * funcs.grad(g_at, reg_idx)
 
     return Result(X, regular, funcs.minimizer_hull(reg_idx), funcs.global_minimizer(reg_idx))

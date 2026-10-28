@@ -27,6 +27,27 @@ class UniformRandom:
         return ctx["rng"].uniform(self.lo, self.hi, size=shape)
 
 
+class FarthestEvader:
+    """Byzantine attack on rules that drop the F values farthest from the
+    receiver's own value, such as DRC-RSSG [10].
+
+    To each regular receiver i the adversary sends x_i + direction * frac * D_i,
+    where D_i is the distance from x_i to its farthest regular in-neighbour.
+    With frac < 1 the value is never among the farthest, so it is kept, yet for
+    the receiver holding the extreme value it lies outside the regular nodes'
+    range. LF drops it, because it is the most extreme value on its side of x_i.
+    """
+
+    def __init__(self, direction=1.0, frac=0.9):
+        self.direction, self.frac = direction, frac
+
+    def __call__(self, t, x, ctx):
+        adj, reg = ctx["adj"], ctx["regular"]
+        n, k = x.size, ctx["adv"].size
+        D = np.array([np.abs(x[adj[i] & reg] - x[i]).max(initial=0.0) for i in range(n)])
+        return np.broadcast_to((x + self.direction * self.frac * D)[:, None], (n, k))
+
+
 class Switching:
     """The oscillation attack of [1, Ex. 7.2] on the 5-node complete graph.
 
