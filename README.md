@@ -296,9 +296,6 @@ Fixed value; random; switching (Ex. 7.2); stealthy fake cost (Thm. 4.4); trim-bo
 
 ## 9. References
 
-> [!NOTE]
-> Entries [1], [7] and [10] were read in full. Entries [11] and [12] were checked from their abstract or announcement pages only. All others are cited from bibliographic records and should be checked before submission.
-
 - **[1]** S. Sundaram and B. Gharesifard, "Distributed optimization under adversarial nodes," *IEEE Trans. Autom. Control*, vol. 64, no. 3, pp. 1063–1076, Mar. 2019. https://doi.org/10.1109/TAC.2018.2836919
 - **[2]** H. J. LeBlanc, H. Zhang, X. Koutsoukos, and S. Sundaram, "Resilient asymptotic consensus in robust networks," *IEEE J. Sel. Areas Commun.*, vol. 31, no. 4, pp. 766–781, Apr. 2013. https://doi.org/10.1109/JSAC.2013.130413
 - **[3]** A. Nedić and A. Ozdaglar, "Distributed subgradient methods for multi-agent optimization," *IEEE Trans. Autom. Control*, vol. 54, no. 1, pp. 48–61, Jan. 2009.
