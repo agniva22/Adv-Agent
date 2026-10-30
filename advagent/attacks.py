@@ -83,3 +83,83 @@ class Switching:
             self.switches.append(t)
         value = x[self.low[0]] if self.phase == "shadow" else x[self.odd] + self.offset
         return np.full(ctx["adv"].size, value)
+
+
+class Stealthy:
+    """The undetectable attack of [1, Thm. 4.4]: each adversary runs the
+    defenders' own update rule exactly, as a regular node would, but descends a
+    fake objective (x - fake)^2 instead of a real one.
+
+    No algorithm can tell such a node from a regular one, so its fake
+    minimizer is indistinguishable from a genuine local objective; whatever a
+    method converges to, it can be pulled towards ``fake``. Malicious (one
+    broadcast value per adversary). ``alpha`` must be the step-size schedule
+    the regular nodes use.
+    """
+
+    def __init__(self, fake, alpha):
+        self.fake, self.alpha = fake, alpha
+        self.z = None
+
+    def __call__(self, t, x, ctx):
+        adv, rule = ctx["adv"], ctx["rule"]
+        if self.z is None:
+            self.z = x[adv].astype(float)
+        sent = self.z.copy()
+        # x[adv] holds what adversaries sent last step; they see each other's current state.
+        x = x.copy()
+        x[adv] = self.z
+        y = np.array([rule.aggregate(a, z, x[ctx["nbrs"][a]], ctx) for a, z in zip(adv, self.z)])
+        at = self.z if getattr(rule, "grad_at_own", False) else y
+        L = ctx["funcs"].L
+        self.z = y - self.alpha(t) * np.clip(2 * (at - self.fake), -L, L)
+        return sent
+
+
+class TrimHugger:
+    """Byzantine: send each regular receiver i the most extreme value that the
+    trimming rules still keep.
+
+    Let r_F be the F-th most extreme regular in-neighbour value beyond x_i in
+    ``direction``. The adversary sends x_i + frac * (r_F - x_i). With frac < 1
+    at least F regular values lie further out, so LF, Su-Vaidya and DRC-RSSG
+    all drop those instead and keep the adversary's value. If fewer than F
+    regular values lie beyond x_i, any value beyond would be trimmed, so it
+    sends x_i (no effect).
+    """
+
+    def __init__(self, F, direction=1.0, frac=0.99):
+        self.F, self.direction, self.frac = F, direction, frac
+
+    def __call__(self, t, x, ctx):
+        adj, reg = ctx["adj"], ctx["regular"]
+        n, k = x.size, ctx["adv"].size
+        out = x.astype(float)
+        for i in np.flatnonzero(reg):
+            beyond = self.direction * (x[adj[i] & reg] - x[i])
+            beyond = np.sort(beyond[beyond > 0])[::-1]
+            if beyond.size >= self.F:
+                out[i] = x[i] + self.direction * self.frac * beyond[self.F - 1]
+        return np.broadcast_to(out[:, None], (n, k))
+
+
+class StallSwitcher:
+    """Graph-independent version of the Ex. 7.2 switching attack.
+
+    Pushes the regular nodes one way with ``up`` until their mean stalls (moves
+    less than ``tol`` over ``window`` steps), then switches to ``down``, and so
+    on. Unlike ``Switching`` it needs no knowledge of the graph or of the
+    phase equilibria. Records the switch times in ``switches``.
+    """
+
+    def __init__(self, up, down, window=50, tol=3e-3):
+        self.up, self.down, self.window, self.tol = up, down, window, tol
+        self.going_up, self.last, self.hist, self.switches = True, 0, [], []
+
+    def __call__(self, t, x, ctx):
+        m = x[ctx["regular"]].mean()
+        self.hist.append(m)
+        if t - self.last >= self.window and abs(m - self.hist[-1 - self.window]) < self.tol:
+            self.going_up, self.last = not self.going_up, t
+            self.switches.append(t)
+        return (self.up if self.going_up else self.down)(t, x, ctx)

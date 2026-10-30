@@ -99,6 +99,10 @@ class Result:
         lo, hi = self.hull
         return float(max(0.0, lo - XR.min(), XR.max() - hi))
 
+    def oscillation(self, start=0):
+        """Total variation of the regular mean from ``start`` on: sum_t |x_bar(t+1) - x_bar(t)|."""
+        return float(np.abs(np.diff(self.mean[start:])).sum())
+
     def error(self):
         """|x_bar_R(T) - x*| at the final step."""
         return float(abs(self.mean[-1] - self.x_star))
