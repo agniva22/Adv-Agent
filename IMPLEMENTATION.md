@@ -13,7 +13,7 @@ Progress on the implementation and validation of the [research proposal](README.
 | 4 | RL attacker | **Done** (2026-10-30) |
 | 5 | Shielded defender + proof | **Done** (2026-10-30) |
 | 6 | Zero-sum training | **Done** (2026-10-30) |
-| 7 | Evaluation | Running (script ready: `experiments/phase7_eval.py`) |
+| 7 | Evaluation | **Done** (2026-10-30) |
 | 8 | Paper | Not started |
 
 ## Repository layout
@@ -56,6 +56,7 @@ results/phase3/   table.md, raw.json, heatmap.png, switching.png
 results/phase4/   table.md, results.json, curves.png, attackers/*.pt
 results/phase5/   table.md, results.json, heatmap.png, training.png, defenders/*.pt
 results/phase6/   table.md, results.json, exploitability.png, defenders/, attackers/
+results/phase7/   table.md, results.json, heatmap.png, robustness.png, attackers/*.pt
 ```
 
 ## How to run
@@ -78,7 +79,7 @@ PYTHONPATH=. python experiments/phase3_attacks.py
 PYTHONPATH=. python experiments/phase4_attacker.py      # CPU, parallel, ~1-2 h
 PYTHONPATH=. python experiments/phase5_defender.py      # GPU, ~1 h
 PYTHONPATH=. python experiments/phase6_game.py          # CPU + GPU, ~3 h for 3 rounds
-PYTHONPATH=. python experiments/phase7_eval.py
+PYTHONPATH=. python experiments/phase7_eval.py          # CPU, ~1.5 h (trains 8 attackers first)
 ```
 
 Compute note: simulator rollouts on 20-node graphs are faster on the CPU than on the GPU (the tensors are tiny), so attackers train on CPU processes in parallel. Defender training backpropagates through 2000 steps and runs on the GPU (RTX 4060, ~1.5 GB per run).
@@ -309,6 +310,40 @@ Alternating best responses with a growing attacker population (a simple PSRO). R
 2. **The game did not make the defender harder to attack.** Exploitability stays at plain LF's level in every round. The defender updates did not move far from LF (relative loss ≈ 1 in each round), so each new attacker faces essentially LF again.
 3. **The bottleneck is the defender's learning, not the game.** The attacker side learns well (Phase 4). Until the defender can learn something better than LF in Phase 5, extra game rounds cannot help.
 
+## Phase 7 results: final evaluation
+
+Every method against every Phase 3 scripted attack plus a **best-response RL attacker**: a PPO attacker trained against that specific method (Phase 4 for the baselines; trained here, 200 iterations warm-started from the LF attacker, for the four learned defenders). Same benchmark instances (10 random 20-node graphs per F, T = 2000). Mean and worst case are over all attacks except "none". Full grids and the F = 2 summary: [results/phase7/table.md](results/phase7/table.md).
+
+Summary, F = 1 (mean error):
+
+| Method | No attack | Mean over attacks | Worst case | Safe under every attack? |
+|---|---|---|---|---|
+| DGD | 0.000 | 8.59 | 39.5 (fixed +50) | No |
+| LF | 0.137 | 0.286 | 0.539 (RL) | Yes |
+| LF-Metropolis | 0.123 | 0.361 | 0.529 (RL) | Yes |
+| Su–Vaidya | 0.141 | **0.275** | **0.517** (RL) | Yes |
+| Q-consensus | 0.123 | 1.95 | 12.8 (RL) | No |
+| Q-consensus, fixed β | 0.138 | 0.572 | 1.82 (stealthy 50) | No |
+| DRC-RSSG | 0.202 | 0.300 | 0.666 (RL) | No (evader) |
+| Shielded RL | 0.137 | 0.284 | 0.540 (RL) | Yes |
+| Shielded RL (game) | 0.136 | 0.283 | 0.538 (RL) | Yes |
+| Shielded RL (no adv. training) | **0.118** | 0.307 | 0.528 (RL) | Yes |
+| Unshielded RL | 0.137 | 5.73 | 39.0 (fixed +50) | No |
+
+F = 2 shows the same picture: safe methods LF 0.611 / 0.898 (mean / worst), Su–Vaidya 0.598 / 0.852, Shielded RL (game) 0.607 / 0.900; Unshielded RL 8.15 / 44.6. U–W graph: every safe method ends at 0.95–0.99 of the b/4 = 1 bound.
+
+![Phase 7 robustness](results/phase7/robustness.png)
+
+![Phase 7 heatmap](results/phase7/heatmap.png)
+
+### What Phase 7 tells us
+
+1. **Safe everywhere = trimming methods + shielded defenders, nothing else.** All four non-trimming baselines and the unshielded ablation fail at least one safety check. This is the cleanest result of the project: the shield turns any learned policy into a provably and empirically safe one (theorem half of C3), and the uncertified defences [7], [10] fail the stress test (C2).
+2. **The strongest attack against every safe method is the learned one.** For all safe methods the worst case is the best-response RL attacker, 1.3–1.9× the error of the best scripted attack for F = 1 (1.1–1.3× for F = 2). Benchmarks that only use scripted attacks underestimate the damage (C1).
+3. **Learning did not improve accuracy (RQ3 negative so far).** The shielded defenders tie LF within 1% and Su–Vaidya is still slightly better. The game-trained defender is no better than the Phase 5 one. The only gain is the no-attack error of the defender trained without adversaries (0.118 vs 0.137), which it loses under attack.
+4. **The unshielded ablation shows why the shield is needed, not just nice.** It is accurate against attacks inside the trimming band (trim-hugger 0.21 vs LF 0.30) but a constant +50 attack captures it (error 39), and its own best-response attacker reaches 2.0 (F = 1) and 12.3 (F = 2).
+5. **Implication for the paper.** C1, C2 and the theorem half of C3 are supported. The learned-aggregator half of C3 (lower error) and C4 are not, and needs either a better-trained defender (Next steps, item 1) or reframing: the shield as a safe envelope in which future learned rules can be deployed without risk.
+
 ## Findings and decisions
 
 These were not obvious from the paper and affect later phases.
@@ -322,12 +357,13 @@ These were not obvious from the paper and affect later phases.
 
 ## Next steps
 
-1. **Phase 7: final evaluation** (running). Every method, including the learned defenders, against every scripted attack plus an RL attacker trained against that method.
-2. **Make the defender learn something better than LF** (the main open problem). Options: a loss that is not a ratio (e.g. log error, or error difference to LF); a smaller floor c or a per-node c; shorter truncated BPTT windows; train first without attacks to fix LF's centrality bias (where Phase 5 did find a gain: 0.118 vs 0.137), then add attacks.
-3. Compute, for the random benchmark graphs, how far the safe methods sit above the |T|/n bound (needs the maximum F-local set per graph). This shows how much room a learned defender has at all.
-4. Check the Su–Vaidya implementation against the pseudocode in [5].
+1. **Make the defender learn something better than LF** (the main open problem). Options: a loss that is not a ratio (e.g. log error, or error difference to LF); a smaller floor c or a per-node c; shorter truncated BPTT windows; train first without attacks to fix LF's centrality bias (where Phase 5 did find a gain: 0.118 vs 0.137), then add attacks.
+2. Compute, for the random benchmark graphs, how far the safe methods sit above the |T|/n bound (needs the maximum F-local set per graph). This shows how much room a learned defender has at all.
+3. Check the Su–Vaidya implementation against the pseudocode in [5].
 
 ## Changelog
+
+- **2026-10-30 (3).** Phase 7 complete: 11 methods × 8 scripted attacks + a best-response RL attacker per method, F = 1, 2, and the U–W graph. Only the trimming methods and the shielded defenders are safe everywhere; the shielded defenders tie LF on accuracy; Su–Vaidya remains the most accurate safe method.
 
 - **2026-10-30 (2).** Phases 4–6 complete. Batched PyTorch simulator (`torchsim.py`), checked against NumPy; PPO attacker with a band action (1.3–1.9× stronger than the best scripted attack on the safe methods, never breaks their safety); shielded defender with proof (`docs/shield_theorem.md`), safe in every run but only ~1% better than LF; unshielded ablation captured by a fixed attack; 3-round zero-sum game, exploitability flat at LF's level. Conda environment `advagent` (`environment.yml`).
 
