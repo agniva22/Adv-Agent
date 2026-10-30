@@ -1,0 +1,14 @@
+name: advagent
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy
+  - scipy
+  - matplotlib
+  - networkx
+  - pytest
+  - pip
+  - pip:
+      - torch          # RL attacker / defender (Phases 4-6); default wheel includes CUDA
+      - gymnasium

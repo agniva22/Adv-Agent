@@ -10,10 +10,10 @@ Progress on the implementation and validation of the [research proposal](README.
 | 1 | Simulator + reproduction of [1] | **Done** (2026-10-28) |
 | 2 | Baselines (DGD, LF, LF-Metropolis, Su–Vaidya, Q-consensus, DRC-RSSG) | **Done** (2026-10-28) |
 | 3 | Scripted attack benchmark | **Done** (2026-10-30) |
-| 4 | RL attacker | Not started |
-| 5 | Shielded defender + proof | Not started |
-| 6 | Zero-sum training | Not started |
-| 7 | Evaluation | Not started |
+| 4 | RL attacker | **Done** (2026-10-30) |
+| 5 | Shielded defender + proof | **Done** (2026-10-30) |
+| 6 | Zero-sum training | **Done** (2026-10-30) |
+| 7 | Evaluation | Running (script ready: `experiments/phase7_eval.py`) |
 | 8 | Paper | Not started |
 
 ## Repository layout
@@ -29,32 +29,59 @@ advagent/
                   TrimHugger (Byzantine), StallSwitcher (switching on any graph)
   baselines.py    comparison methods: LF-Metropolis, Su-Vaidya [5], Q-consensus [7],
                   DRC-RSSG [10] (closed form + LP check)
+  torchsim.py     batched, differentiable PyTorch simulator (padded neighbour lists):
+                  all baselines and scripted attacks, Band action for RL attackers
+  learn.py        training instances, PPO attacker (AttackerPolicy, train_attacker),
+                  shielded defender (ShieldedDefender, train_defender)
+  bench.py        shared Phase 3 benchmark in the batched simulator (evaluate, flag)
+docs/
+  shield_theorem.md   statement and proof that the shielded defender keeps [1]'s guarantees
 experiments/
   phase1_reproduce.py   regenerates results/phase1/
   phase2_baselines.py   regenerates results/phase2/ (~25 s on 24 cores)
   phase3_attacks.py     regenerates results/phase3/ (~90 s on 24 cores)
+  phase4_attacker.py    trains the RL attackers -> results/phase4/
+  phase5_defender.py    trains the defenders (GPU) -> results/phase5/
+  phase6_game.py        attacker/defender game rounds -> results/phase6/
+  phase7_eval.py        final evaluation -> results/phase7/
 tests/
   test_phase1.py  15 regression tests, one per claim of [1] we reproduce
   test_phase2.py  7 tests for the comparison methods
   test_phase3.py  6 tests for the new attacks
+  test_phase4.py  PyTorch simulator = NumPy simulator (7 rules x 4 attacks x F = 1, 2), Band action
+  test_phase5.py  shield: valid LF weights, wild random policies stay safe, unshielded is captured
 results/phase1/   figures + summary.json
 results/phase2/   table.md, raw.json, errors.png
 results/phase3/   table.md, raw.json, heatmap.png, switching.png
+results/phase4/   table.md, results.json, curves.png, attackers/*.pt
+results/phase5/   table.md, results.json, heatmap.png, training.png, defenders/*.pt
+results/phase6/   table.md, results.json, exploitability.png, defenders/, attackers/
 ```
 
 ## How to run
 
+All experiments use the `advagent` conda environment (Python 3.12, NumPy, SciPy, Matplotlib, NetworkX, pytest, PyTorch with CUDA, Gymnasium):
+
 ```bash
+conda env create -f environment.yml
+conda activate advagent
+
 # tests (the env var stops ROS's globally installed pytest plugins from loading)
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q
 
 # Phase 1-3 figures and numbers
-PYTHONPATH=. python3 experiments/phase1_reproduce.py
-PYTHONPATH=. python3 experiments/phase2_baselines.py
-PYTHONPATH=. python3 experiments/phase3_attacks.py
+PYTHONPATH=. python experiments/phase1_reproduce.py
+PYTHONPATH=. python experiments/phase2_baselines.py
+PYTHONPATH=. python experiments/phase3_attacks.py
+
+# Phase 4-7 (learning; in order, each uses the previous phase's saved policies)
+PYTHONPATH=. python experiments/phase4_attacker.py      # CPU, parallel, ~1-2 h
+PYTHONPATH=. python experiments/phase5_defender.py      # GPU, ~1 h
+PYTHONPATH=. python experiments/phase6_game.py          # CPU + GPU, ~3 h for 3 rounds
+PYTHONPATH=. python experiments/phase7_eval.py
 ```
 
-Requirements so far: Python 3.13, NumPy, SciPy, Matplotlib, NetworkX (tests only). PyTorch is not yet installed; it is needed from Phase 4.
+Compute note: simulator rollouts on 20-node graphs are faster on the CPU than on the GPU (the tensors are tiny), so attackers train on CPU processes in parallel. Defender training backpropagates through 2000 steps and runs on the GPU (RTX 4060, ~1.5 GB per run).
 
 ## Simulator conventions
 
@@ -192,6 +219,96 @@ Special graphs of [1]:
 6. **The |T|/n lower bound is tight on the U–W graph.** LF, LF-Metropolis, Su–Vaidya and DRC-RSSG all end within about 5% of b/4. On that graph no safe method, including ours, can do much better. Only the unsafe Q-consensus variants get below it. The learned defender's room for improvement lies on graphs where the safe methods sit far above the bound.
 7. **F = 2 roughly doubles to triples the error of every safe method** (LF: 0.28 → 0.69 under fixed +50).
 
+## Phase 4 results: RL attacker
+
+### Setup
+
+- **Simulator.** `advagent/torchsim.py` re-implements the simulator in PyTorch, batched over episodes. `tests/test_phase4.py` checks it against the NumPy simulator for 7 rules × 4 attacks × F = 1, 2 (states, error and oscillation match to 1e−6).
+- **Action ("band").** For each receiver, the adversary picks a number a. a = 0 sends the receiver's own value; a = ±1 sends the F-th most extreme regular neighbour value on that side (the trim-hugger edge); beyond ±1 the value extends further by the neighbour spread. Values are clipped to ±50. This keeps one policy meaningful on every graph and scale.
+- **Policy.** One small network shared by every (adversary, receiver) pair: 14 local features (own value, neighbour values, the band edges, the previous action) and 5 global ones. It acts every k = 10 steps.
+- **Training.** PPO (γ = 1, λ = 0.95, clip 0.2), 300 iterations, 48 episodes each, on random training graphs separate from the benchmark graphs. Two objectives: *bias* (move the regular mean in one direction; the attacker uses whichever direction hurts more per instance) and *oscillation* (reward |Δ mean| per decision from T/4, k = 50).
+- Evaluated on the same Phase 3 benchmark instances. Full table: [results/phase4/table.md](results/phase4/table.md).
+
+### Bias attacker: mean error
+
+| Method | F | Best scripted attack (Phase 3) | RL attacker | RL / scripted | Safety broken? |
+|---|---|---|---|---|---|
+| LF | 1 | 0.303 | **0.539** | 1.78× | No |
+| LF-Metropolis | 1 | 0.421 | **0.529** | 1.26× | No |
+| Su–Vaidya | 1 | 0.269 | **0.517** | 1.92× | No |
+| DRC-RSSG | 1 | 0.491 | **0.666** | 1.35× | No |
+| Q-consensus | 1 | 1.28 | **10.6** | 8.2× | Yes: hull violation 44 |
+| Q-consensus, fixed β | 1 | 1.82 | 1.36 | 0.75× | (excess 0.07) |
+| DGD | 1 | 39.5 | 22.7 | 0.57× | Yes (as with scripted) |
+| LF | 2 | 0.692 | **0.898** | 1.30× | No |
+| LF-Metropolis | 2 | 0.794 | **0.897** | 1.13× | No |
+| Su–Vaidya | 2 | 0.685 | **0.852** | 1.24× | No |
+| DRC-RSSG | 2 | 0.974 | **1.144** | 1.17× | No |
+
+Oscillation attacker against LF (total variation of the mean, t ≥ T/2): on the Ex. 7.2 graph 20.2 vs 11.3 for the scripted switching attack, but only with a sampled (random) policy; the deterministic policy gets 0.11. On random graphs it reaches 0.76, below scripted switching (1.79).
+
+![Phase 4 training curves](results/phase4/curves.png)
+
+### What Phase 4 tells us
+
+1. **The hand-design ceiling of Phase 3 was not real.** Against the safe trimming methods, the learned attacker is 1.3–1.9× stronger than the best scripted attack (F = 1), and 1.1–1.3× for F = 2. RQ1 is answered: learned attacks find damage that hand-written ones miss.
+2. **Theorem 7.1 holds against it.** The attacker never pushes LF, LF-Metropolis or Su–Vaidya out of the hull or the initial range, even though it was trained to do as much damage as possible.
+3. **Methods without a guarantee break much more.** Q-consensus error goes from 1.28 to 10.6 (hull violation 44). This sharpens the Phase 2 finding: a learned attacker finds the hole when there is one.
+4. **The RL attacker is not stronger everywhere.** Against DGD and fixed-β Q-consensus, the simple fixed +50 / stealthy attacks are stronger, because the band action keeps values near the regular range by design. Evaluations should always report the best of scripted and learned.
+5. **Oscillation is harder to learn than bias.** The learned oscillation attacker only beats scripted switching through randomness, not through a learned switching rule. The scripted hysteresis attack remains the reference for oscillation.
+
+## Phase 5 results: shielded RL defender
+
+### Setup
+
+- **Shield (contribution C3).** The defender runs the LF filter, then a DeepSets policy scores the node itself and every kept value, and the weights are a *floored softmax*: every weight is at least η_i = c/(deg_i + 1), c = 0.25. [docs/shield_theorem.md](docs/shield_theorem.md) proves this is always an instance of LF's update (8) in [1], so Thms. 6.1, 6.4 and 7.1 hold for **every** parameter value, including during training. `tests/test_phase5.py` checks it with random large-parameter policies against the strongest attacks.
+- **Policy.** 15 features per value (own value, kept value, degrees, gradient, step size, and what the filter dropped). The last layer starts at zero, so training starts from exactly LF.
+- **Training.** Backpropagation through the simulator (T = 2000, gradient checkpointing, GPU), 300 iterations, F = 1 and 2 mixed. Loss = final error divided by plain LF's error on the same episode. Training mix: no attack, fixed ±50, random, evader, trim-hugger, switching, stealthy, and the Phase 4 attackers trained against LF.
+- **Three variants:** Shielded RL; Shielded RL trained without adversaries; Unshielded RL (no filter, no floor: an ablation).
+
+Full table: [results/phase5/table.md](results/phase5/table.md).
+
+| Method | F = 1: no attack | F = 1: mean over attacks | F = 1: RL attacker | F = 2: mean over attacks | F = 2: RL attacker | Unsafe? |
+|---|---|---|---|---|---|---|
+| LF | 0.137 | 0.286 | 0.539 | 0.611 | 0.898 | No |
+| LF-Metropolis | 0.123 | 0.361 | 0.529 | 0.651 | 0.884 | No |
+| Su–Vaidya | 0.141 | 0.275 | 0.516 | 0.598 | 0.849 | No |
+| **Shielded RL** | 0.137 | 0.284 | 0.540 | 0.605 | 0.897 | **No** |
+| Shielded RL (no adv. training) | 0.118 | 0.306 | 0.524 | 0.622 | 0.905 | No |
+| Unshielded RL | 0.137 | 5.56 | 0.554 | 6.74 | 0.837 | **Yes**: error 39 / 45 under fixed +50 |
+
+U–W graph (bound b/4 = 1): Shielded RL 0.990, LF 0.990, Unshielded RL 0.718.
+
+![Phase 5 heatmap](results/phase5/heatmap.png)
+
+### What Phase 5 tells us
+
+1. **The shield works as proved.** Zero unsafe runs for both shielded defenders, under every attack and F.
+2. **Without the shield, a learned defender is captured.** The unshielded policy does well against the attacks it adapts to (trim-hugger 0.21 vs LF 0.30) but a simple fixed +50 attack drives its error to 39. This is the empirical half of the C3 claim: learning alone is not safe.
+3. **The accuracy gain is negligible.** The shielded defender is within about 1% of LF (0.284 vs 0.286, F = 1; 0.605 vs 0.611, F = 2), slightly better only under switching (0.234 vs 0.245). Training without adversaries gives a better no-attack error (0.118 vs 0.137) but worse attacked error. RQ3 ("beat LF and LF-Metropolis") is **not yet answered positively**.
+4. **The training signal is weak.** The relative loss stayed around 1 (it got noisier, not lower; last-20 mean 1.69 for Shielded RL, driven by episodes where LF's own error is tiny). The policy learned to stay near LF. Likely causes: the ratio loss is heavy-tailed, the floor c = 0.25 leaves little freedom on low-degree nodes, and the gradients through 2000 steps are poor.
+5. **The |T|/n bound still binds on U–W**, as expected: the shield cannot beat a bound that holds for every safe rule.
+
+## Phase 6 results: zero-sum training
+
+Alternating best responses with a growing attacker population (a simple PSRO). Round r: train a PPO attacker against the current defender D_r (warm-started, 150 iterations, F = 1 and 2), measure its damage (*exploitability*), then fine-tune the defender against the Phase 5 mix plus all attackers so far (150 iterations). D_0 is the Phase 5 Shielded RL defender. Full table: [results/phase6/table.md](results/phase6/table.md).
+
+| Round | Exploitability, F = 1 | Exploitability, F = 2 | Max hull violation | Max excess (α = 0) |
+|---|---|---|---|---|
+| 0 | 0.539 | 0.898 | 0 | 0 |
+| 1 | 0.535 | 0.903 | 0 | 0 |
+| 2 | 0.539 | 0.904 | 0 | 0 |
+| 3 | 0.537 | 0.899 | 0 | 0 |
+| plain LF (Phase 4 attacker) | 0.539 | 0.898 | 0 | 0 |
+
+![Phase 6 exploitability](results/phase6/exploitability.png)
+
+### What Phase 6 tells us
+
+1. **Safety holds through the whole game.** No round produced a hull violation or range excess, as the shield theorem predicts.
+2. **The game did not make the defender harder to attack.** Exploitability stays at plain LF's level in every round. The defender updates did not move far from LF (relative loss ≈ 1 in each round), so each new attacker faces essentially LF again.
+3. **The bottleneck is the defender's learning, not the game.** The attacker side learns well (Phase 4). Until the defender can learn something better than LF in Phase 5, extra game rounds cannot help.
+
 ## Findings and decisions
 
 These were not obvious from the paper and affect later phases.
@@ -205,13 +322,14 @@ These were not obvious from the paper and affect later phases.
 
 ## Next steps
 
-1. **Phase 4: RL attacker.** Train against LF first, then every baseline. Targets to beat: LF error 0.30 (F = 1) and 0.69 (F = 2), and switching oscillation 1.8. The attacker must never break Thm. 7.1 against LF.
-2. Compute, for the random benchmark graphs, how far the safe methods sit above the |T|/n bound (needs the maximum F-local set per graph). This shows where a learned defender has room to improve.
-3. Check the Su–Vaidya implementation against the pseudocode in [5].
-4. Vectorise `simulate()` across episodes before RL training. The current per-node Python loop is fine for validation (~0.4 s per 2000-step run on 20 nodes) but too slow for training.
-5. Install PyTorch (+ Gymnasium/PettingZoo) for Phase 4.
+1. **Phase 7: final evaluation** (running). Every method, including the learned defenders, against every scripted attack plus an RL attacker trained against that method.
+2. **Make the defender learn something better than LF** (the main open problem). Options: a loss that is not a ratio (e.g. log error, or error difference to LF); a smaller floor c or a per-node c; shorter truncated BPTT windows; train first without attacks to fix LF's centrality bias (where Phase 5 did find a gain: 0.118 vs 0.137), then add attacks.
+3. Compute, for the random benchmark graphs, how far the safe methods sit above the |T|/n bound (needs the maximum F-local set per graph). This shows how much room a learned defender has at all.
+4. Check the Su–Vaidya implementation against the pseudocode in [5].
 
 ## Changelog
+
+- **2026-10-30 (2).** Phases 4–6 complete. Batched PyTorch simulator (`torchsim.py`), checked against NumPy; PPO attacker with a band action (1.3–1.9× stronger than the best scripted attack on the safe methods, never breaks their safety); shielded defender with proof (`docs/shield_theorem.md`), safe in every run but only ~1% better than LF; unshielded ablation captured by a fixed attack; 3-round zero-sum game, exploitability flat at LF's level. Conda environment `advagent` (`environment.yml`).
 
 - **2026-10-30.** Phase 3 complete: Stealthy, TrimHugger and StallSwitcher attacks; `Result.oscillation`; 8-attack × 7-method benchmark for F = 1 and 2, plus the Ex. 7.2 and U–W graphs; 6 new tests (28 total). Work moved to `main` (the `implementation` branch was merged and removed).
 - **2026-10-28 (2).** Phase 2 complete: LF-Metropolis, Su–Vaidya, Q-consensus (two variants) and DRC-RSSG; farthest-evader attack; 10-seed benchmark; DRC-RSSG safety counterexample; 22 tests passing. Corrected Phase 1 finding 2.
