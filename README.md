@@ -41,7 +41,7 @@ Standard algorithms break easily in this setting. In distributed subgradient des
 LF avoids this. Each regular node discards up to $F$ neighbour values above its own and up to $F$ below. It then takes a convex combination of what is left, with every weight at least $\eta$, and adds a subgradient step:
 
 $$
-x_i(t+1) = a_{ii}(t)\,x_i(t) + \sum_{j \in \mathcal{J}_i(t)} a_{ij}(t)\,x_j(t) - \alpha_t\, d_i(t)
+x_i(t+1) = a_{ii}(t)x_i(t) + \sum_{j \in \mathcal{J}_i(t)} a_{ij}(t)x_j(t) - \alpha_t d_i(t)
 $$
 
 **What LF guarantees.** On $(2F+1)$-robust graphs, the regular nodes reach consensus even against F-local Byzantine adversaries [1, Thm. 6.1]. For F-total malicious adversaries, $(F+1, F+1)$-robustness is both necessary and sufficient for consensus [1, Thm. 6.4]. If the step sizes satisfy $\sum_t \alpha_t = \infty$ and $\alpha_t \to 0$, the regular nodes also end up inside the convex hull of their local minimizers [1, Thm. 7.1].
