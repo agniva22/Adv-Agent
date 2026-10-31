@@ -1,63 +1,107 @@
-# Shield theorem (Phase 5, contribution C3)
+# Shield Theorem
 
-**Claim.** A learned defender that only re-weights the values LF keeps, with a floored softmax, inherits every guarantee of Sundaram & Gharesifard [1]. This holds for *every* parameter setting, so it also holds during training and against an attacker that exploits the learned policy.
+> **Claim.** A learned defender that only re-weights the values LF keeps, using a floored softmax, inherits every guarantee of Sundaram and Gharesifard [1]. This holds for *every* parameter setting of the policy, so it also holds during training and against an attacker that has learned to exploit the policy.
 
-## Setting
+This is the theoretical core of the project (contribution C3 in the [proposal](../README.md)). The code is `ShieldedDefender` in `advagent/learn.py`, and the results are in [IMPLEMENTATION.md](../IMPLEMENTATION.md), Phases 5–7.
 
-[1, Sec. V] defines the LF dynamics (8). At each step t, every regular node v_i:
+## 1. Setting
 
-1. receives the values {x_j(t) : v_j ∈ N_i⁻};
-2. removes the F highest values above its own and the F lowest values below its own (all of them if there are fewer than F), breaking ties arbitrarily. The retained in-neighbours form J_i(t);
-3. updates
+We follow [1, Sec. V]. Let $\mathcal{R}$ be the set of regular nodes, and let $\mathcal{N}_i^-$ be the in-neighbours of node $v_i$, that is, the nodes whose values $v_i$ receives. At every step $t$, each regular node $v_i$ does three things:
 
-   x_i(t+1) = a_ii(t) x_i(t) + Σ_{j ∈ J_i(t)} a_ij(t) x_j(t) − α_t d_i(t),
+1. it receives the values $\{x_j(t) : v_j \in \mathcal{N}_i^-\}$;
+2. it removes the $F$ highest values above its own and the $F$ lowest values below its own (all of them if there are fewer than $F$), breaking ties arbitrarily, and calls the retained in-neighbours $\mathcal{J}_i(t) \subseteq \mathcal{N}_i^-$;
+3. it updates
 
-   where d_i(t) is a subgradient of f_i at the convex combination a_ii x_i + Σ a_ij x_j.
+$$
+x_i(t+1) = a_{ii}(t)\,x_i(t) + \sum_{j \in \mathcal{J}_i(t)} a_{ij}(t)\,x_j(t) - \alpha_t\, d_i(t), \tag{1}
+$$
 
-The only requirement on the weights is: *"at each time-step t and for each v_i ∈ R, the weights a_ij(t), v_j ∈ {v_i} ∪ J_i(t), are lower-bounded by some strictly positive real number η and sum to 1"* [1, Sec. V]. The weights may change over time and are not tied to any formula. Nothing in [1] restricts how they are chosen.
+where $d_i(t)$ is a subgradient of $f_i$ at the convex combination $a_{ii}(t)\,x_i(t) + \sum_{j \in \mathcal{J}_i(t)} a_{ij}(t)\,x_j(t)$.
 
-## The shielded rule (`advagent/learn.py`, `ShieldedDefender`)
+Equation (1) is eq. (8) of [1]. The paper places only one requirement on the weights: *"at each time-step $t$ and for each $v_i \in \mathcal{R}$, the weights $a_{ij}(t)$, $v_j \in \{v_i\} \cup \mathcal{J}_i(t)$, are lower-bounded by some strictly positive real number $\eta$ and sum to 1"* [1, Sec. V]. The weights may change over time and do not have to follow any formula. Nothing in [1] restricts how they are chosen, and that freedom is what we use.
 
-Node v_i computes J_i(t) with the LF filter (step 2 above, `torchsim.lf_keep`). A policy π_θ then outputs finite scores s_ij(t) for j ∈ {i} ∪ J_i(t). The weights are
+## 2. The shielded rule
 
-  a_ij(t) = η_i + (1 − m_i(t) η_i) · softmax_j(s_i(t)),  with  m_i(t) = |J_i(t)| + 1,  η_i = c / (|N_i⁻| + 1),  0 < c ≤ 1,
+Fix a constant $0 < c \le 1$. At each step $t$, node $v_i$ first computes $\mathcal{J}_i(t)$ with the LF filter (step 2 above). A policy $\pi_\theta$ then gives a finite score $s_{ij}(t)$ to the node itself and to every retained neighbour, $j \in \{i\} \cup \mathcal{J}_i(t)$. Let
 
-and a_ij(t) = 0 for every in-neighbour that LF removed. The node then takes the subgradient step at the resulting convex combination.
+$$
+m_i(t) = \lvert\mathcal{J}_i(t)\rvert + 1, \qquad \eta_i = \frac{c}{\lvert\mathcal{N}_i^-\rvert + 1}, \qquad p_{ij}(t) = \frac{e^{s_{ij}(t)}}{\sum_{k \in \{i\} \cup \mathcal{J}_i(t)} e^{s_{ik}(t)}} .
+$$
 
-The scores may depend on anything: the node's own state, the received values, its gradient, the step size, its history, or the adversaries' values. Our implementation uses its own state, the retained values, degrees, its gradient and α_t.
+The weights are a *floored softmax*:
 
-## Proposition
+$$
+a_{ij}(t) =
+\begin{cases}
+\eta_i + \bigl(1 - m_i(t)\,\eta_i\bigr)\, p_{ij}(t), & j \in \{i\} \cup \mathcal{J}_i(t), \\
+0, & j \in \mathcal{N}_i^- \setminus \mathcal{J}_i(t).
+\end{cases} \tag{2}
+$$
 
-Let d_max be the largest in-degree and η = c / (d_max + 1). For every θ, and more generally for any rule that produces finite scores, the regular nodes running the shielded rule follow the LF dynamics (8) of [1] with parameter F and weight bound η. Hence:
+In words, every value LF keeps first gets a guaranteed share $\eta_i$, and the policy only decides how to split the rest. The node then takes the subgradient step of (1) at the resulting convex combination.
 
-- **Thm. 6.1:** with an F-local set of Byzantine nodes on a (2F+1)-robust graph, subgradients bounded by L and α_t → 0, the regular nodes reach consensus.
-- **Thm. 6.4:** with F-total malicious nodes, they reach consensus on every (F+1, F+1)-robust graph.
-- **Thm. 7.1:** under either of these conditions, with Σ α_t = ∞ and α_t → 0, every regular state ends in the hull [min_i min M_i, max_i max M_i] of the regular nodes' local minimizers, whatever the adversaries do.
+The scores may depend on anything: the node's own state, the received values, its gradient, the step size, its history, or even the adversaries' values. Our implementation uses the node's own state, the retained values, the degrees, the gradient and $\alpha_t$.
 
-All three hold for any learned policy, including one that is still training or one that an adversary has learned to exploit.
+## 3. Proposition
 
-## Proof
+> **Proposition (Shield).** Let $d_{\max} = \max_{i \in \mathcal{R}} \lvert\mathcal{N}_i^-\rvert$ and $\eta = c/(d_{\max}+1)$. For every $\theta$, and more generally for any rule that produces finite scores, the regular nodes running the shielded rule (2) follow the LF dynamics (1) with parameter $F$ and weight bound $\eta$. Consequently:
+>
+> - **[1, Thm. 6.1].** If the adversaries form an $F$-local set of Byzantine nodes, the graph is $(2F+1)$-robust, the subgradients are bounded by $L$ and $\alpha_t \to 0$, then the regular nodes reach consensus.
+> - **[1, Thm. 6.4].** If the adversaries form an $F$-total set of malicious nodes and the graph is $(F+1, F+1)$-robust, then the regular nodes reach consensus.
+> - **[1, Thm. 7.1].** Under either condition, if also $\sum_t \alpha_t = \infty$ and $\alpha_t \to 0$, every regular state converges into the interval $\bigl[\min_{i \in \mathcal{R}} \min \mathcal{M}_i,\ \max_{i \in \mathcal{R}} \max \mathcal{M}_i\bigr]$, where $\mathcal{M}_i$ is the set of minimizers of $f_i$, whatever the adversaries do.
+>
+> All three hold for any learned policy, including one that is still training and one that an adversary has learned to exploit.
 
-Check the four requirements of (8) at an arbitrary step t and regular node v_i.
+## 4. Proof
 
-1. **Support.** The weights are nonzero only on {i} ∪ J_i(t), and J_i(t) is exactly LF's retained set.
-2. **Lower bound.** softmax_j ≥ 0 and 1 − m_i η_i ≥ 1 − (|N_i⁻| + 1) η_i = 1 − c ≥ 0, so a_ij(t) ≥ η_i ≥ c / (d_max + 1) = η > 0. Here m_i ≤ |N_i⁻| + 1 because J_i(t) ⊆ N_i⁻.
-3. **Sum to one.** Σ_j a_ij = m_i η_i + (1 − m_i η_i) Σ_j softmax_j = 1.
-4. **Subgradient point.** The simulator evaluates d_i at the convex combination (`torchsim.step`, gradient at y unless the rule asks for x_i).
+Fix any step $t$ and any regular node $v_i$. Because the scores are finite, the softmax terms are well defined, with $p_{ij}(t) > 0$ and $\sum_{j} p_{ij}(t) = 1$. We check the four requirements of (1) one by one.
 
-So the closed loop is an instance of (8) with parameter F and bound η.
+**Support.** By (2), $a_{ij}(t)$ is nonzero only for $j \in \{i\} \cup \mathcal{J}_i(t)$, and $\mathcal{J}_i(t)$ is exactly the set LF keeps.
 
-The hypotheses of Thms. 6.1, 6.4 and 7.1 concern only the graph, the adversary model, the f_i, the step sizes and the fact that the regular nodes run (8) with weights bounded by η. Their proofs use only per-step properties of the weights:
+**Lower bound.** Since $\mathcal{J}_i(t) \subseteq \mathcal{N}_i^-$, we have $m_i(t) \le \lvert\mathcal{N}_i^-\rvert + 1$, and so
 
-- the reduction to regular-only dynamics (9) in Prop. 5.1 uses a_ij ≥ η and Σ a_ij = 1;
-- the consensus arguments use lower bounds of η or η/2 on the entries of the equivalent matrix Ā(t).
+$$
+1 - m_i(t)\,\eta_i \;\ge\; 1 - \bigl(\lvert\mathcal{N}_i^-\rvert + 1\bigr)\,\eta_i \;=\; 1 - c \;\ge\; 0 .
+$$
 
-None of them uses how the weights were chosen. The conclusions therefore apply. ∎
+Together with $p_{ij}(t) \ge 0$, this gives, for every $j \in \{i\} \cup \mathcal{J}_i(t)$,
 
-## Remarks
+$$
+a_{ij}(t) \;\ge\; \eta_i \;=\; \frac{c}{\lvert\mathcal{N}_i^-\rvert + 1} \;\ge\; \frac{c}{d_{\max} + 1} \;=\; \eta \;>\; 0 .
+$$
 
-- **What is not inherited.** [1] gives no optimality guarantee for LF, and none is claimed here. The lower bound of [1, Prop. 8.1] applies to the shielded rule too, as to any rule that respects the hull. The learned weights can only move the result *within* the guaranteed set.
-- **The trade-off set by c.** c = 1 forces uniform weights, which is plain LF. A smaller c gives the policy more freedom but a smaller η, which weakens the consensus rate in the proofs. We use c = 0.25, so every weight is at least a quarter of LF's uniform weight 1/(|N_i⁻| + 1).
-- **Implementation guard.** The proof needs finite scores. Non-finite scores would make the softmax undefined, so the implementation replaces NaN and ±∞ scores before the softmax (`torch.nan_to_num`).
-- **Ablation (unshielded).** `ShieldedDefender(shield=False)` drops step 2 and the floor. It is not an instance of (8), so none of the above applies. Phase 7 measures what that costs.
-- **Empirical check.** `tests/test_phase5.py` runs randomly initialised policies with large parameters (far from LF) against the strongest scripted attacks and checks hull containment and consensus. The Phase 7 evaluation reports zero violations for the trained policies.
+**Sum to one.**
+
+$$
+\sum_{j \in \{i\} \cup \mathcal{J}_i(t)} a_{ij}(t) \;=\; m_i(t)\,\eta_i + \bigl(1 - m_i(t)\,\eta_i\bigr) \sum_{j \in \{i\} \cup \mathcal{J}_i(t)} p_{ij}(t) \;=\; m_i(t)\,\eta_i + 1 - m_i(t)\,\eta_i \;=\; 1 .
+$$
+
+**Subgradient point.** The subgradient $d_i(t)$ is evaluated at the convex combination built from these weights, exactly as (1) requires (`torchsim.step` computes the gradient there).
+
+So the closed loop is an instance of (1) with parameter $F$ and bound $\eta$.
+
+It remains to check that the theorems of [1] apply to it. Their hypotheses concern only the graph, the adversary model, the functions $f_i$, the step sizes, and the fact that the regular nodes run (1) with weights bounded below by $\eta$. Their proofs also use only per-step properties of the weights. The reduction to the regular-only dynamics (9) in [1, Prop. 5.1] needs $a_{ij}(t) \ge \eta$ and $\sum_j a_{ij}(t) = 1$, and the consensus arguments need lower bounds of $\eta$ or $\eta/2$ on the entries of the equivalent matrix $\bar{A}(t)$. None of them depends on *how* the weights were chosen, so all three conclusions hold. $\blacksquare$
+
+## 5. Remarks
+
+**What is not inherited.** [1] gives no optimality guarantee for LF, and we claim none here. The lower bound of [1, Prop. 8.1] applies to the shielded rule just as it does to any rule that keeps the regular states in the hull: on some instances the error is at least $\frac{\lvert T\rvert}{n}\lvert b - a\rvert$, where $T$ is a maximum $F$-local set. The learned weights can only move the result *within* the guaranteed set.
+
+**Relation to plain LF.** If all of node $v_i$'s scores are equal, then $p_{ij}(t) = 1/m_i(t)$ and
+
+$$
+a_{ij}(t) = \eta_i + \frac{1 - m_i(t)\,\eta_i}{m_i(t)} = \frac{1}{m_i(t)},
+$$
+
+which is exactly LF's uniform weight over $\{i\} \cup \mathcal{J}_i(t)$, for any $c$. Our policy's last layer starts at zero, so training starts from plain LF.
+
+**The trade-off set by $c$.** The policy controls only the mass $1 - m_i(t)\,\eta_i$ above the floor. A larger $c$ raises the floor $\eta$, which strengthens the consensus rate in the proofs but leaves the policy less freedom. When LF removes nothing ($m_i = \lvert\mathcal{N}_i^-\rvert + 1$), $c = 1$ leaves no freedom at all. A smaller $c$ gives the policy more freedom at the price of a smaller $\eta$. We use $c = 0.25$, so every weight is at least a quarter of $1/(\lvert\mathcal{N}_i^-\rvert + 1)$.
+
+**Implementation guard.** The proof needs finite scores, since a non-finite score would make the softmax undefined. The implementation therefore replaces NaN and $\pm\infty$ scores before the softmax (`torch.nan_to_num`).
+
+**Unshielded ablation.** `ShieldedDefender(shield=False)` drops both the filter and the floor. It is not an instance of (1), so the proposition does not apply to it. In our experiments a constant $+50$ attack captures it (mean error 39 for $F = 1$), while the shielded defender is never unsafe.
+
+**Empirical check.** `tests/test_phase5.py` runs randomly initialised policies with large parameters, far from LF, against the strongest scripted attacks, and checks hull containment and consensus. The Phase 5–7 evaluations report zero safety violations for every trained shielded policy.
+
+## Reference
+
+**[1]** S. Sundaram and B. Gharesifard, "Distributed optimization under adversarial nodes," *IEEE Trans. Autom. Control*, vol. 64, no. 3, pp. 1063–1076, Mar. 2019. https://doi.org/10.1109/TAC.2018.2836919
