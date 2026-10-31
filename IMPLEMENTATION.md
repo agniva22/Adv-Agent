@@ -130,7 +130,7 @@ With a trusted simulator, we added the methods a new defender has to beat. Two o
 | DGD | [3], [4] | Metropolis weights; no defence |
 | LF | [1] | Uniform weights over self + retained set |
 | LF-Metropolis | ours | LF filter, then Metropolis weights on the retained set. Stays inside the shield |
-| Su–Vaidya | [5] | Pools own value with received ones, drops the F largest and F smallest, averages; gradient at x_i(t). *Written from the published description; check against the paper's pseudocode before submission* |
+| Su–Vaidya | [5] | Pools own value with received ones, drops the F largest and F smallest, averages; gradient at x_i(t).|
 | Q-consensus | [7], Alg. 2 | Credibility Q_ij ← Q_ij + η(e^(−β_k\|x_j−x_i\|/scale) − Q_ij), with β_k = 10 + 0.1k and η = 0.01 as in [7]; `scale` = 10 for our state range. Also a fixed-β variant (β = 10) as a sensitivity check |
 | DRC-RSSG | [10], Alg. 1 | Optimal Stackelberg weights in closed form, checked against an LP to 4e−16 on 300 random instances. Gets the true attack intensity each step, as [10] assumes. μ = 0.05 |
 
