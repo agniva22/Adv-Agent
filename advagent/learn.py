@@ -22,6 +22,7 @@ import math
 import numpy as np
 import torch
 from torch import nn
+from torch.utils.checkpoint import checkpoint
 
 from . import bench
 from . import graphs as g
@@ -247,7 +248,11 @@ class ShieldedDefender(nn.Module, ts.Rule):
         self.c, self.shield = c, shield
         self.name = name or ("Shielded RL" if shield else "Unshielded RL")
 
-    def weights(self, x, vals, batch, at):
+    def memory(self, x, vals, batch, t, keep):
+        """Extra per-slot features (B, n, d+1, k), self first; none here."""
+        return None
+
+    def weights(self, x, vals, batch, at, t=0):
         own = x[..., None]
         keep = ts.lf_keep(own, vals, batch.nmask, batch.F) if self.shield else batch.nmask
         rel = torch.where(keep, vals - own, 0)
@@ -273,6 +278,9 @@ class ShieldedDefender(nn.Module, ts.Rule):
         selff = torch.cat([torch.zeros_like(own), torch.zeros_like(own), ldi, ldi, torch.zeros_like(own),
                            torch.ones_like(own), node], -1)[..., None, :]
         tok = torch.cat([selff, edge], -2)                       # (B, n, d+1, f), self first
+        extra = self.memory(x, vals, batch, t, keep)
+        if extra is not None:
+            tok = torch.cat([tok, extra], -1)
         mask = torch.cat([torch.ones_like(keep[..., :1]), keep], -1)
         h = self.phi(tok)
         mf = mask[..., None].to(h.dtype)
@@ -285,11 +293,51 @@ class ShieldedDefender(nn.Module, ts.Rule):
             w = torch.where(mask, w, 0)
         else:
             w = sm
+        if getattr(self, "gate", None) is not None:
+            # Fallback: blend with LF's uniform weights. Both are valid shield
+            # weights (>= eta_i, sum 1), so any convex combination is too.
+            g = torch.sigmoid(self.gate(pooled[..., 0, :]))      # (B, n, 1)
+            lf = mask / mask.sum(-1, keepdim=True)
+            w = g * w + (1 - g) * lf
         return w, mask
 
     def aggregate(self, x, vals, batch, t, at):
-        w, _ = self.weights(x, vals, batch, at)
+        w, _ = self.weights(x, vals, batch, at, t)
         return w[..., 0] * x + (w[..., 1:] * vals).sum(-1)
+
+
+class TrustDefender(ShieldedDefender):
+    """Shielded defender with a per-neighbour memory and an LF fallback gate.
+
+    For every in-neighbour slot the node keeps exponential averages (factor
+    ``beta``) of how far that neighbour is from it relative to the others,
+    how often LF trimmed it, and on which side it was. The memory is a
+    function of past states only, stored per step so that gradient
+    checkpointing replays it exactly. The shield proof allows scores that
+    depend on history, so the guarantees are unchanged.
+    """
+
+    n_feat = ShieldedDefender.n_feat + 3
+
+    def __init__(self, hidden=32, c=0.05, beta=0.95, name="Trust RL"):
+        super().__init__(hidden, c, shield=True, name=name)
+        self.beta = beta
+        self.gate = mlp(hidden, hidden, 1, depth=1)
+        self.mem = {}
+
+    def reset(self, batch):
+        self.mem = {}
+
+    def memory(self, x, vals, batch, t, keep):
+        with torch.no_grad():
+            diff = torch.where(batch.nmask, vals - x[..., None], 0)
+            typical = diff.abs().sum(-1, keepdim=True) / batch.deg[..., None].clamp(min=1) + 1e-6
+            cur = torch.stack([torch.tanh(diff.abs() / typical / 2), (batch.nmask & ~keep).to(x.dtype),
+                               torch.sign(diff)], -1)
+            prev = self.mem.get(t - 1)
+            m = cur * (1 - self.beta) if prev is None else self.beta * prev + (1 - self.beta) * cur
+            self.mem[t] = m
+        return torch.cat([torch.zeros_like(m[..., :1, :]), m], -2)
 
 
 def defender_loss(r, batch):
@@ -298,14 +346,51 @@ def defender_loss(r, batch):
     return e.sum(1) / batch.ev.sum(1)
 
 
+def _window_losses(batch, rule, T, alpha, att, window, grad, ckpt=50):
+    """Yield the per-node squared error at the end of every ``window`` steps.
+
+    With ``grad``, each yielded loss is attached to its own window only (the
+    state is detached between windows: truncated BPTT), and the caller must
+    call backward before asking for the next window. Inside a window, chunks
+    of ``ckpt`` steps are recomputed in the backward pass to save memory.
+    """
+    rule.reset(batch)
+    astate = att.init(batch) if att is not None else ()
+    x = batch.x0.clone()
+
+    def chunk(t0, t1, x, *astate):
+        for t in range(t0, t1):
+            x, astate = ts.step(t, x, batch, rule, alpha, att, astate)
+        return (x, *astate)
+
+    for t0 in range(0, T, window):
+        with torch.set_grad_enabled(grad):
+            for c0 in range(t0, min(T, t0 + window), ckpt):
+                c1 = min(T, t0 + window, c0 + ckpt)
+                res = checkpoint(chunk, c0, c1, x, *astate, use_reentrant=False) if grad else chunk(c0, c1, x, *astate)
+                x, astate = res[0], tuple(res[1:])
+            yield defender_loss({"x": x}, batch)
+        x, astate = x.detach(), tuple(s.detach() for s in astate)
+
+
 def train_defender(defender, pools, attacks, T=2000, iters=300, B=24, device="cpu", seed=0, lr=3e-3,
-                   ckpt=50, log=None, eval_fn=None, eval_every=50):
+                   ckpt=50, log=None, eval_fn=None, eval_every=50, loss_type="ratio", window=None):
     """Backpropagation through the simulator.
 
     ``pools``: {F: instances}. ``attacks``: list of (weight, factory) where
     factory(F) returns an attack spec as in ``bench.SCRIPTED``, or the string
     'stealthy' (fake minimizer drawn from [-50, 50]). Each iteration draws one
     F and one attack for the whole batch.
+
+    ``loss_type``: 'ratio' (Phase 5: mean over episodes of loss / LF loss) or
+    'diff' (batch loss minus LF's, divided by LF's batch loss: no per-episode
+    division, so episodes where LF is nearly exact cannot dominate) or
+    'constrained' ('diff' plus lambda_a * max(0, diff) for the drawn attack a,
+    with lambda_a raised by dual ascent while the defender is worse than LF on
+    a: "no worse than LF on any attack" as a soft constraint).
+    ``window``: None for full backpropagation through T steps; otherwise
+    truncated BPTT with a loss at the end of every window, later windows
+    weighted more (weight k / K for window k of K).
     """
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
@@ -317,28 +402,52 @@ def train_defender(defender, pools, attacks, T=2000, iters=300, B=24, device="cp
     p /= p.sum()
     Fs = list(pools)
     hist = []
+    lam = {}
     for it in range(iters):
         F = Fs[rng.integers(len(Fs))]
         insts = [pools[F][i] for i in rng.choice(len(pools[F]), B, replace=False)]
-        spec = attacks[rng.choice(len(attacks), p=p)][1](F)
+        ai = rng.choice(len(attacks), p=p)
+        spec = attacks[ai][1](F)
         if isinstance(spec, str) and spec == "stealthy":
             spec = ("stealthy", float(rng.uniform(-50, 50)))
         insts, att = bench.prepare(insts, spec)
         batch = ts.Batch(insts, device=device)
-        # Loss relative to plain LF on the same episodes: batches differ a lot in
-        # difficulty, and this keeps the gradient scale comparable across them.
-        with torch.no_grad():
-            torch.manual_seed(it)
-            ref = defender_loss(ts.run(batch, ts.LF(), T, alpha, att), batch)
-        torch.manual_seed(it)
-        r = ts.run(batch, defender, T, alpha, att, ckpt=ckpt)
-        loss = (defender_loss(r, batch) / (ref + 1e-4)).mean()
         opt.zero_grad()
-        loss.backward()
+        shown = None
+        if window:
+            torch.manual_seed(it)
+            refs = list(_window_losses(batch, ts.LF(), T, alpha, att, window, grad=False))
+            torch.manual_seed(it)
+            K = len(refs)
+            total = 0.0
+            for k, (l, ref) in enumerate(zip(_window_losses(batch, defender, T, alpha, att, window, grad=True), refs)):
+                part = (k + 1) / K * (l.mean() - ref.mean()) / (ref.mean() + 1e-4)
+                part.backward()
+                total += float(part.detach())
+            loss = torch.tensor(total / sum((k + 1) / K for k in range(K)))
+        else:
+            # Loss relative to plain LF on the same episodes: batches differ a lot in
+            # difficulty, and this keeps the gradient scale comparable across them.
+            with torch.no_grad():
+                torch.manual_seed(it)
+                ref = defender_loss(ts.run(batch, ts.LF(), T, alpha, att), batch)
+            torch.manual_seed(it)
+            r = ts.run(batch, defender, T, alpha, att, ckpt=ckpt)
+            own = defender_loss(r, batch)
+            if loss_type == "ratio":
+                loss = (own / (ref + 1e-4)).mean()
+            else:
+                loss = (own.mean() - ref.mean()) / (ref.mean() + 1e-4)
+                shown = loss.detach()   # logged without the penalty
+                if loss_type == "constrained":
+                    la = lam.get((F, ai), 1.0)
+                    lam[(F, ai)] = min(20.0, max(0.0, la + float(loss.detach())))
+                    loss = loss + la * torch.relu(loss)
+            loss.backward()
         nn.utils.clip_grad_norm_(defender.parameters(), 1.0)
         opt.step()
         sched.step()
-        hist.append(float(loss))
+        hist.append(float(loss.detach() if shown is None else shown))
         if log and (it % 10 == 0 or it == iters - 1):
             log(f"  defender it {it:4d}  loss / LF loss {np.mean(hist[-10:]):.4f}")
         if eval_fn and (it + 1) % eval_every == 0:
