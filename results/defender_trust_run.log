@@ -1,0 +1,134 @@
+  evaluated LF F=1 on 100 graphs
+  evaluated Su-Vaidya F=1 on 100 graphs
+  evaluated fix 1+4 (earlier) F=1 on 100 graphs
+  evaluated memory + fallback F=1 on 100 graphs
+  evaluated constrained F=1 on 100 graphs
+  evaluated memory + fallback + constrained F=1 on 100 graphs
+  evaluated LF F=2 on 100 graphs
+  evaluated Su-Vaidya F=2 on 100 graphs
+  evaluated fix 1+4 (earlier) F=2 on 100 graphs
+  evaluated memory + fallback F=2 on 100 graphs
+  evaluated constrained F=2 on 100 graphs
+  evaluated memory + fallback + constrained F=2 on 100 graphs
+  evaluated LF F=1 on 10 graphs
+  evaluated Su-Vaidya F=1 on 10 graphs
+  evaluated fix 1+4 (earlier) F=1 on 10 graphs
+  evaluated memory + fallback F=1 on 10 graphs
+  evaluated constrained F=1 on 10 graphs
+  evaluated memory + fallback + constrained F=1 on 10 graphs
+  evaluated LF F=2 on 10 graphs
+  evaluated Su-Vaidya F=2 on 10 graphs
+  evaluated fix 1+4 (earlier) F=2 on 10 graphs
+  evaluated memory + fallback F=2 on 10 graphs
+  evaluated constrained F=2 on 10 graphs
+  evaluated memory + fallback + constrained F=2 on 10 graphs
+# Literature-guided defenders
+
+## 100 unseen graphs
+
+Mean error over 100 graphs per F (T = 2000). Mean is over the 9 attacks (not 'none'). Wins = attacks on which the method beats LF.
+
+### F = 1
+
+| Method | No attack | Mean over attacks | Worst attack | Change vs LF (mean) | Wins vs LF | Safe? |
+|---|---|---|---|---|---|---|
+| LF | 0.215 | 0.403 | 0.609 (RL attacker (vs LF)) | +0.0% | 0/9 | yes |
+| Su-Vaidya | 0.231 | 0.399 | 0.601 (RL attacker (vs LF)) | -0.8% | 3/9 | yes |
+| fix 1+4 (earlier) | 0.184 | 0.385 | 0.579 (RL attacker (vs LF)) | -4.4% | 9/9 | yes |
+| memory + fallback | 0.182 | 0.377 | 0.583 (RL attacker (vs LF)) | -6.3% | 9/9 | yes |
+| constrained | 0.185 | 0.389 | 0.579 (RL attacker (vs LF)) | -3.4% | 7/9 | yes |
+| memory + fallback + constrained | 0.198 | 0.394 | 0.590 (RL attacker (vs LF)) | -2.2% | 9/9 | yes |
+
+Per attack (error):
+
+| Attack | LF | Su-Vaidya | fix 1+4 (earlier) | memory + fallback | constrained | memory + fallback + constrained |
+|---|---|---|---|---|---|---|
+| none | 0.215 | 0.231 | 0.184 | 0.182 | 0.185 | 0.198 |
+| fixed +50 | 0.426 | 0.432 | 0.423 | 0.402 | 0.428 | 0.419 |
+| random Byzantine | 0.188 | 0.206 | 0.160 | 0.171 | 0.159 | 0.182 |
+| farthest evader | 0.400 | 0.408 | 0.387 | 0.378 | 0.397 | 0.389 |
+| stealthy (fake 5) | 0.388 | 0.393 | 0.366 | 0.359 | 0.375 | 0.383 |
+| stealthy (fake 50) | 0.426 | 0.432 | 0.422 | 0.408 | 0.427 | 0.421 |
+| trim-hugger | 0.451 | 0.429 | 0.428 | 0.418 | 0.440 | 0.439 |
+| switching | 0.334 | 0.294 | 0.315 | 0.299 | 0.309 | 0.331 |
+| RL attacker (vs LF) | 0.609 | 0.601 | 0.579 | 0.583 | 0.579 | 0.590 |
+
+### F = 2
+
+| Method | No attack | Mean over attacks | Worst attack | Change vs LF (mean) | Wins vs LF | Safe? |
+|---|---|---|---|---|---|---|
+| LF | 0.277 | 0.599 | 0.889 (RL attacker (vs LF)) | +0.0% | 0/9 | yes |
+| Su-Vaidya | 0.289 | 0.586 | 0.864 (RL attacker (vs LF)) | -2.1% | 7/9 | yes |
+| fix 1+4 (earlier) | 0.224 | 0.575 | 0.837 (RL attacker (vs LF)) | -4.1% | 7/9 | yes |
+| memory + fallback | 0.217 | 0.565 | 0.826 (RL attacker (vs LF)) | -5.8% | 9/9 | yes |
+| constrained | 0.229 | 0.581 | 0.840 (RL attacker (vs LF)) | -3.0% | 6/9 | yes |
+| memory + fallback + constrained | 0.251 | 0.590 | 0.861 (RL attacker (vs LF)) | -1.5% | 8/9 | yes |
+
+Per attack (error):
+
+| Attack | LF | Su-Vaidya | fix 1+4 (earlier) | memory + fallback | constrained | memory + fallback + constrained |
+|---|---|---|---|---|---|---|
+| none | 0.277 | 0.289 | 0.224 | 0.217 | 0.229 | 0.251 |
+| fixed +50 | 0.643 | 0.642 | 0.647 | 0.628 | 0.652 | 0.642 |
+| random Byzantine | 0.241 | 0.261 | 0.189 | 0.204 | 0.192 | 0.222 |
+| farthest evader | 0.629 | 0.626 | 0.626 | 0.617 | 0.635 | 0.623 |
+| stealthy (fake 5) | 0.613 | 0.612 | 0.588 | 0.577 | 0.596 | 0.605 |
+| stealthy (fake 50) | 0.643 | 0.642 | 0.646 | 0.633 | 0.652 | 0.643 |
+| trim-hugger | 0.617 | 0.586 | 0.590 | 0.562 | 0.598 | 0.599 |
+| switching | 0.517 | 0.457 | 0.473 | 0.470 | 0.484 | 0.528 |
+| RL attacker (vs LF) | 0.889 | 0.864 | 0.837 | 0.826 | 0.840 | 0.861 |
+
+## Phase 3 benchmark (10 graphs)
+
+Mean error over 10 graphs per F (T = 2000). Mean is over the 9 attacks (not 'none'). Wins = attacks on which the method beats LF.
+
+### F = 1
+
+| Method | No attack | Mean over attacks | Worst attack | Change vs LF (mean) | Wins vs LF | Safe? |
+|---|---|---|---|---|---|---|
+| LF | 0.137 | 0.286 | 0.539 (RL attacker (vs LF)) | +0.0% | 0/9 | yes |
+| Su-Vaidya | 0.141 | 0.275 | 0.516 (RL attacker (vs LF)) | -4.0% | 7/9 | yes |
+| fix 1+4 (earlier) | 0.114 | 0.311 | 0.524 (RL attacker (vs LF)) | +8.7% | 4/9 | yes |
+| memory + fallback | 0.120 | 0.288 | 0.522 (RL attacker (vs LF)) | +0.5% | 5/9 | yes |
+| constrained | 0.115 | 0.315 | 0.520 (RL attacker (vs LF)) | +10.1% | 3/9 | yes |
+| memory + fallback + constrained | 0.117 | 0.284 | 0.528 (RL attacker (vs LF)) | -0.7% | 4/9 | yes |
+
+Per attack (error):
+
+| Attack | LF | Su-Vaidya | fix 1+4 (earlier) | memory + fallback | constrained | memory + fallback + constrained |
+|---|---|---|---|---|---|---|
+| none | 0.137 | 0.141 | 0.114 | 0.120 | 0.115 | 0.117 |
+| fixed +50 | 0.277 | 0.269 | 0.304 | 0.272 | 0.309 | 0.283 |
+| random Byzantine | 0.143 | 0.147 | 0.143 | 0.151 | 0.138 | 0.136 |
+| farthest evader | 0.257 | 0.251 | 0.277 | 0.245 | 0.288 | 0.266 |
+| stealthy (fake 5) | 0.250 | 0.241 | 0.248 | 0.233 | 0.256 | 0.253 |
+| stealthy (fake 50) | 0.277 | 0.269 | 0.304 | 0.281 | 0.309 | 0.287 |
+| trim-hugger | 0.303 | 0.266 | 0.318 | 0.304 | 0.336 | 0.313 |
+| switching | 0.245 | 0.242 | 0.374 | 0.295 | 0.366 | 0.210 |
+| RL attacker (vs LF) | 0.539 | 0.516 | 0.524 | 0.522 | 0.520 | 0.528 |
+
+### F = 2
+
+| Method | No attack | Mean over attacks | Worst attack | Change vs LF (mean) | Wins vs LF | Safe? |
+|---|---|---|---|---|---|---|
+| LF | 0.291 | 0.611 | 0.898 (RL attacker (vs LF)) | +0.0% | 0/9 | yes |
+| Su-Vaidya | 0.288 | 0.598 | 0.849 (RL attacker (vs LF)) | -2.2% | 8/9 | yes |
+| fix 1+4 (earlier) | 0.275 | 0.623 | 0.877 (RL attacker (vs LF)) | +1.9% | 6/9 | yes |
+| memory + fallback | 0.259 | 0.592 | 0.858 (RL attacker (vs LF)) | -3.1% | 7/9 | yes |
+| constrained | 0.279 | 0.647 | 0.884 (RL attacker (vs LF)) | +5.8% | 4/9 | yes |
+| memory + fallback + constrained | 0.280 | 0.617 | 0.881 (RL attacker (vs LF)) | +1.0% | 7/9 | yes |
+
+Per attack (error):
+
+| Attack | LF | Su-Vaidya | fix 1+4 (earlier) | memory + fallback | constrained | memory + fallback + constrained |
+|---|---|---|---|---|---|---|
+| none | 0.291 | 0.288 | 0.275 | 0.259 | 0.279 | 0.280 |
+| fixed +50 | 0.692 | 0.685 | 0.700 | 0.667 | 0.706 | 0.688 |
+| random Byzantine | 0.216 | 0.215 | 0.217 | 0.222 | 0.229 | 0.228 |
+| farthest evader | 0.679 | 0.667 | 0.673 | 0.652 | 0.693 | 0.664 |
+| stealthy (fake 5) | 0.658 | 0.651 | 0.639 | 0.609 | 0.648 | 0.644 |
+| stealthy (fake 50) | 0.692 | 0.685 | 0.690 | 0.667 | 0.695 | 0.686 |
+| trim-hugger | 0.666 | 0.618 | 0.635 | 0.597 | 0.648 | 0.643 |
+| switching | 0.390 | 0.412 | 0.553 | 0.467 | 0.671 | 0.505 |
+| RL attacker (vs LF) | 0.898 | 0.849 | 0.877 | 0.858 | 0.884 | 0.881 |
+

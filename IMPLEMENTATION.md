@@ -446,6 +446,32 @@ All methods were safe in every run. The first GPU run crashed with a CUDA launch
 3. **The best-response attacker did not get stronger.** Over 200 iterations its training curve stayed flat, against LF and against the defender alike. The Phase 4 attacker therefore seems to be a local optimum for PPO, and our "best response" is only as strong as PPO can make it. A stronger test would train an attacker from scratch, use the oscillation objective, or add an attack that looks at the defender's memory.
 4. **The remaining weak spot is switching.** On the 100 unseen graphs the defender beats LF on switching but not Su–Vaidya (0.305 vs 0.294 at F = 1). On the 10 benchmark graphs it is worse than both on switching.
 
+### A stronger attacker search
+
+The best-response attacker above never improved on its warm start, so we searched harder (`experiments/defender_attack_search.py`, results in `results/defender_attack_search/`). Per F we trained three kinds of attacker:
+- **from scratch:** a fresh policy with no warm start, trained for 400 iterations;
+- **swing:** a fresh policy with the oscillation objective, using the Phase 4 settings, trained for 300 iterations;
+- **memory-aware:** `learn.MemoryAwareAttacker`, which also sees what each receiver's memory says about the adversaries. It was warm-started from the Phase 4 attacker and trained for 300 iterations.
+
+From scratch and swing were trained against LF as well, for a fair budget. Every method then faced every learned attacker: these, the earlier best responses and the Phase 4 attacker. Each was run in both push directions (swing also with sampled actions), and we kept the worst result per graph.
+
+**Worst learned attacker, 100 unseen graphs per F** (mean error):
+
+| Method | F = 1 | F = 2 | Swing: oscillation of x̄, F = 1 / F = 2 |
+|---|---|---|---|
+| LF | 0.609 | 0.889 | 5.05 / 1.12 |
+| Su–Vaidya | 0.602 | 0.866 | 4.78 / 1.03 |
+| **memory + fallback** | **0.584** | **0.833** | **4.75 / 1.03** |
+
+All methods were safe against every attacker.
+
+### What we learned
+
+1. **The attack ceiling is real, not a training failure.** The from-scratch attackers start at a bias of about 0.1 and climb to the same strength as the Phase 4 attacker (about 0.61 / 0.89 against LF, and 0.58 / 0.82 against the defender). Two independent searches end at the same level, so this is close to the most a band attacker can do.
+2. **Seeing the memory does not help the attacker.** The memory-aware attacker stayed flat during training and ends within 0.005 of the plain one. Against these attackers, the memory gives nothing away.
+3. **The defender is harder to make swing.** During training the swing attacker reached an oscillation of 2.1 against LF but only 0.6 against the defender (F = 1). In evaluation the defender has the lowest oscillation of the three methods.
+4. **The defender's worst case stays the best of the three on unseen graphs:** 4% below LF at F = 1 and 6% below at F = 2, and 3% and 4% below Su–Vaidya. On the 10 benchmark graphs, Su–Vaidya's worst case is slightly lower (0.516 vs 0.522 at F = 1, 0.849 vs 0.859 at F = 2); the larger set is the more reliable one.
+
 ## Findings and decisions
 
 None of these were obvious from the paper, and each one changed how we did later phases.
@@ -459,14 +485,15 @@ None of these were obvious from the paper, and each one changed how we did later
 
 ## Next steps
 
-1. **A stronger attacker search against the memory + fallback defender:** an attacker trained from scratch, the oscillation objective, and an attacker that observes the defender's memory. If the gain still holds, rerun the Phase 6 game with this defender and update the Phase 7 tables.
-2. **Make every evaluation use the 100 unseen graphs**, since the 10-graph benchmark is too noisy to rank defenders.
+1. **Fold the memory + fallback defender into the main results.** Rerun the Phase 6 game with it, and update the Phase 7 tables and figures on the 100 unseen graphs.
+2. **Close the switching gap to Su–Vaidya**, for example with more switching-style attacks in training or a longer memory.
 3. **A tighter measure of room.** The oracle of fix 0 is too strong to be useful. A fairer one would use one set of weights shared across graphs, or compare the safe methods with the |T|/n bound (this needs each graph's maximum F-local set).
 4. **Check Su–Vaidya** against the pseudocode in [5].
 
 ## Changelog
 
 - **2026-11-01.** Literature-guided defenders (`experiments/defender_trust.py`): `learn.TrustDefender` (per-neighbour memory + LF fallback gate) and `loss_type="constrained"`; evaluation on 100 unseen graphs per F. Memory + fallback beats LF on all 9 attack settings at F = 1 and 2 (mean −6.3% / −5.8%) and beats Su–Vaidya; all safe. Not yet tested against its own best-response attacker.
+- **2026-11-02.** Stronger attacker search (`experiments/defender_attack_search.py`, `learn.MemoryAwareAttacker`): from-scratch, swing and memory-aware attackers. From-scratch attackers reach the same ceiling as the Phase 4 one; seeing the memory does not help; the defender keeps the lowest worst case on unseen graphs (0.584 / 0.833 vs LF 0.609 / 0.889). All safe.
 - **2026-11-01 (2).** Best-response test (`experiments/defender_br.py`): with its own RL attacker plus sleeper and flicker attacks, the memory + fallback defender still has the lowest no-attack, mean and worst-case error (worst −4% / −7% vs LF); all safe. The attacker did not improve over its warm start, so a stronger attacker search is next.
 - **2026-10-31 (2).** Defender fixes: oracle "room" check (`experiments/defender_room.py`) and four training variants (`experiments/defender_fixes.py`); `train_defender` gained `loss_type="diff"` and `window`. The shield leaves near-perfect weights available; the new defenders cut no-attack error by up to 26% but are 2–15% worse than LF on the mean over attacks. All safe.
 - **2026-10-31.** Rewrote this log and the README in connected, plainer prose; no results changed.

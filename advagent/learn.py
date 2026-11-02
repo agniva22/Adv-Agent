@@ -107,6 +107,45 @@ class AttackerPolicy(nn.Module):
         return torch.distributions.Normal(self.mu(loc)[..., 0], self.log_std.exp())
 
 
+class MemoryAwareAttacker(AttackerPolicy):
+    """Attacker that also sees, for every receiver, what that receiver's
+    ``TrustDefender`` memory says about the adversary slots (mean over them of
+    the three memory channels; the side channel relative to ``dir``). The
+    defender being attacked is set with ``watch``; against a rule without a
+    memory the extra features are zero."""
+
+    n_local = AttackerPolicy.n_local + 3
+
+    def watch(self, rule):
+        object.__setattr__(self, "rule", rule)   # a reference, not a submodule
+        return self
+
+    def features(self, t, T, at, x, vals, batch, direc, prev_mean, a_prev):
+        loc, glob = super().features(t, T, at, x, vals, batch, direc, prev_mean, a_prev)
+        mem = getattr(getattr(self, "rule", None), "mem", {}).get(t - 1)
+        if mem is None:
+            extra = torch.zeros(*x.shape, 3, device=x.device, dtype=x.dtype)
+        else:
+            w = batch.from_adv[..., None].to(x.dtype)
+            extra = (mem * w).sum(-2) / w.sum(-2).clamp(min=1)
+            extra = torch.cat([extra[..., :2], extra[..., 2:] * direc[:, None, None]], -1)
+        return torch.cat([loc, extra], -1), glob
+
+    @classmethod
+    def from_policy(cls, pol):
+        """Same behaviour as ``pol`` (zero weights on the memory features)."""
+        new = cls()
+        state = new.state_dict()
+        for k, v in pol.state_dict().items():
+            if state[k].shape == v.shape:
+                state[k] = v.clone()
+            else:
+                state[k] = torch.zeros_like(state[k])
+                state[k][:, : v.shape[1]] = v
+        new.load_state_dict(state)
+        return new
+
+
 class LearnedAttack(ts.Attack):
     """Run an ``AttackerPolicy`` as an attack (for evaluation or as a fixed
     opponent). Deterministic (mean action) unless ``sample``."""

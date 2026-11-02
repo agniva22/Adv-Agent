@@ -1,0 +1,29 @@
+# Defender fixes
+
+Mean error on the Phase 3 benchmark instances (10 graphs per F, T = 2000), same attacks as Phase 5 (eight scripted attacks and the Phase 4 RL attacker trained against LF). Mean is over all attacks except 'none'. ⚠ / ∅ = some run unsafe / without consensus.
+
+## F = 1
+
+| Method | No attack | Mean over attacks | Worst attack | Change vs LF (mean) | Safe? |
+|---|---|---|---|---|---|
+| LF | 0.137 | 0.286 | 0.539 (RL attacker (vs LF)) | +0.0% | yes |
+| Su-Vaidya | 0.141 | 0.275 | 0.516 (RL attacker (vs LF)) | -3.9% | yes |
+| Shielded RL (Phase 5) | 0.137 | 0.284 | 0.540 (RL attacker (vs LF)) | -0.7% | yes |
+| fix 1: diff loss | 0.112 | 0.317 | 0.515 (RL attacker (vs LF)) | +10.6% | yes |
+| fix 1+4: diff loss, c = 0.05 | 0.114 | 0.311 | 0.524 (RL attacker (vs LF)) | +8.6% | yes |
+| fix 1+4+2: two stages | 0.101 | 0.316 | 0.494 (RL attacker (vs LF)) | +10.5% | yes |
+| fix 1+4+3: truncated BPTT | 0.110 | 0.328 | 0.506 (RL attacker (vs LF)) | +14.7% | yes |
+
+## F = 2
+
+| Method | No attack | Mean over attacks | Worst attack | Change vs LF (mean) | Safe? |
+|---|---|---|---|---|---|
+| LF | 0.291 | 0.611 | 0.898 (RL attacker (vs LF)) | +0.0% | yes |
+| Su-Vaidya | 0.288 | 0.598 | 0.849 (RL attacker (vs LF)) | -2.2% | yes |
+| Shielded RL (Phase 5) | 0.291 | 0.605 | 0.897 (RL attacker (vs LF)) | -1.1% | yes |
+| fix 1: diff loss | 0.281 | 0.625 | 0.874 (RL attacker (vs LF)) | +2.3% | yes |
+| fix 1+4: diff loss, c = 0.05 | 0.275 | 0.625 | 0.877 (RL attacker (vs LF)) | +2.1% | yes |
+| fix 1+4+2: two stages | 0.259 | 0.645 | 0.880 (RL attacker (vs LF)) | +5.4% | yes |
+| fix 1+4+3: truncated BPTT | 0.271 | 0.641 | 0.857 (RL attacker (vs LF)) | +4.9% | yes |
+
+

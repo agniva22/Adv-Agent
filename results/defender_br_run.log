@@ -1,0 +1,128 @@
+/home/agniva/anaconda3/envs/advagent/lib/python3.12/site-packages/torch/cuda/__init__.py:241: UserWarning: CUDA initialization: CUDA unknown error - this may be due to an incorrectly set up environment, e.g. changing env variable CUDA_VISIBLE_DEVICES after program start. Setting the available devices to be zero. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+/home/agniva/anaconda3/envs/advagent/lib/python3.12/site-packages/torch/autograd/graph.py:1113: UserWarning: CUDA initialization: CUDA unknown error - this may be due to an incorrectly set up environment, e.g. changing env variable CUDA_VISIBLE_DEVICES after program start. Setting the available devices to be zero. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/agniva/anaconda3/envs/advagent/lib/python3.12/site-packages/torch/autograd/graph.py:1113: UserWarning: CUDA initialization: CUDA unknown error - this may be due to an incorrectly set up environment, e.g. changing env variable CUDA_VISIBLE_DEVICES after program start. Setting the available devices to be zero. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/agniva/anaconda3/envs/advagent/lib/python3.12/site-packages/torch/autograd/graph.py:1113: UserWarning: CUDA initialization: CUDA unknown error - this may be due to an incorrectly set up environment, e.g. changing env variable CUDA_VISIBLE_DEVICES after program start. Setting the available devices to be zero. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/agniva/anaconda3/envs/advagent/lib/python3.12/site-packages/torch/autograd/graph.py:1113: UserWarning: CUDA initialization: CUDA unknown error - this may be due to an incorrectly set up environment, e.g. changing env variable CUDA_VISIBLE_DEVICES after program start. Setting the available devices to be zero. (Triggered internally at /__w/pytorch/pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+  evaluated LF F=1 on 100 graphs
+  evaluated Su-Vaidya F=1 on 100 graphs
+  evaluated memory + fallback F=1 on 100 graphs
+  evaluated LF F=2 on 100 graphs
+  evaluated Su-Vaidya F=2 on 100 graphs
+  evaluated memory + fallback F=2 on 100 graphs
+  evaluated LF F=1 on 10 graphs
+  evaluated Su-Vaidya F=1 on 10 graphs
+  evaluated memory + fallback F=1 on 10 graphs
+  evaluated LF F=2 on 10 graphs
+  evaluated Su-Vaidya F=2 on 10 graphs
+  evaluated memory + fallback F=2 on 10 graphs
+# Memory + fallback defender against its own best-response attacker
+
+## 100 unseen graphs
+
+Mean error over 100 graphs per F (T = 2000). 'RL attacker (best response)' is trained against that method (memory + fallback, LF: here, 200 PPO iterations from the Phase 4 LF attacker; Su–Vaidya: Phase 4). Mean and worst are over all attacks except 'none'.
+
+### F = 1
+
+| Method | No attack | Mean over attacks | Worst attack | Own best-response attacker | Safe? |
+|---|---|---|---|---|---|
+| LF | 0.215 | 0.418 | 0.609 (RL attacker (vs LF, Phase 4)) | 0.609 | yes |
+| Su-Vaidya | 0.231 | 0.413 | 0.602 (RL attacker (best response)) | 0.602 | yes |
+| memory + fallback | 0.182 | 0.389 | 0.583 (RL attacker (vs LF, Phase 4)) | 0.582 | yes |
+
+| Attack | LF | Su-Vaidya | memory + fallback |
+|---|---|---|---|
+| none | 0.215 | 0.231 | 0.182 |
+| fixed +50 | 0.426 | 0.432 | 0.402 |
+| random Byzantine | 0.187 | 0.205 | 0.170 |
+| farthest evader | 0.400 | 0.408 | 0.378 |
+| stealthy (fake 5) | 0.388 | 0.393 | 0.360 |
+| stealthy (fake 50) | 0.426 | 0.432 | 0.409 |
+| trim-hugger | 0.451 | 0.429 | 0.419 |
+| switching | 0.334 | 0.294 | 0.305 |
+| sleeper (t = 500) | 0.448 | 0.429 | 0.414 |
+| sleeper (t = 1000) | 0.447 | 0.429 | 0.414 |
+| flicker (25 steps) | 0.286 | 0.295 | 0.232 |
+| RL attacker (vs LF, Phase 4) | 0.609 | 0.601 | 0.583 |
+| RL attacker (best response) | 0.609 | 0.602 | 0.582 |
+
+### F = 2
+
+| Method | No attack | Mean over attacks | Worst attack | Own best-response attacker | Safe? |
+|---|---|---|---|---|---|
+| LF | 0.277 | 0.610 | 0.889 (RL attacker (best response)) | 0.889 | yes |
+| Su-Vaidya | 0.289 | 0.596 | 0.871 (RL attacker (best response)) | 0.871 | yes |
+| memory + fallback | 0.216 | 0.565 | 0.828 (RL attacker (best response)) | 0.828 | yes |
+
+| Attack | LF | Su-Vaidya | memory + fallback |
+|---|---|---|---|
+| none | 0.277 | 0.289 | 0.216 |
+| fixed +50 | 0.643 | 0.642 | 0.628 |
+| random Byzantine | 0.239 | 0.259 | 0.201 |
+| farthest evader | 0.629 | 0.626 | 0.618 |
+| stealthy (fake 5) | 0.613 | 0.612 | 0.577 |
+| stealthy (fake 50) | 0.643 | 0.642 | 0.633 |
+| trim-hugger | 0.617 | 0.586 | 0.562 |
+| switching | 0.517 | 0.457 | 0.471 |
+| sleeper (t = 500) | 0.615 | 0.586 | 0.555 |
+| sleeper (t = 1000) | 0.615 | 0.586 | 0.554 |
+| flicker (25 steps) | 0.415 | 0.414 | 0.327 |
+| RL attacker (vs LF, Phase 4) | 0.889 | 0.864 | 0.826 |
+| RL attacker (best response) | 0.889 | 0.871 | 0.828 |
+
+## Phase 3 benchmark (10 graphs)
+
+Mean error over 10 graphs per F (T = 2000). 'RL attacker (best response)' is trained against that method (memory + fallback, LF: here, 200 PPO iterations from the Phase 4 LF attacker; Su–Vaidya: Phase 4). Mean and worst are over all attacks except 'none'.
+
+### F = 1
+
+| Method | No attack | Mean over attacks | Worst attack | Own best-response attacker | Safe? |
+|---|---|---|---|---|---|
+| LF | 0.137 | 0.302 | 0.539 (RL attacker (vs LF, Phase 4)) | 0.539 | yes |
+| Su-Vaidya | 0.141 | 0.286 | 0.517 (RL attacker (best response)) | 0.517 | yes |
+| memory + fallback | 0.120 | 0.293 | 0.522 (RL attacker (vs LF, Phase 4)) | 0.520 | yes |
+
+| Attack | LF | Su-Vaidya | memory + fallback |
+|---|---|---|---|
+| none | 0.137 | 0.141 | 0.120 |
+| fixed +50 | 0.277 | 0.269 | 0.272 |
+| random Byzantine | 0.143 | 0.149 | 0.149 |
+| farthest evader | 0.257 | 0.251 | 0.245 |
+| stealthy (fake 5) | 0.250 | 0.241 | 0.233 |
+| stealthy (fake 50) | 0.277 | 0.269 | 0.281 |
+| trim-hugger | 0.303 | 0.266 | 0.304 |
+| switching | 0.245 | 0.242 | 0.286 |
+| sleeper (t = 500) | 0.306 | 0.266 | 0.302 |
+| sleeper (t = 1000) | 0.306 | 0.266 | 0.293 |
+| flicker (25 steps) | 0.177 | 0.181 | 0.107 |
+| RL attacker (vs LF, Phase 4) | 0.539 | 0.516 | 0.522 |
+| RL attacker (best response) | 0.539 | 0.517 | 0.520 |
+
+### F = 2
+
+| Method | No attack | Mean over attacks | Worst attack | Own best-response attacker | Safe? |
+|---|---|---|---|---|---|
+| LF | 0.291 | 0.628 | 0.900 (RL attacker (best response)) | 0.900 | yes |
+| Su-Vaidya | 0.288 | 0.606 | 0.852 (RL attacker (best response)) | 0.852 | yes |
+| memory + fallback | 0.259 | 0.594 | 0.859 (RL attacker (best response)) | 0.859 | yes |
+
+| Attack | LF | Su-Vaidya | memory + fallback |
+|---|---|---|---|
+| none | 0.291 | 0.288 | 0.259 |
+| fixed +50 | 0.692 | 0.685 | 0.667 |
+| random Byzantine | 0.216 | 0.214 | 0.218 |
+| farthest evader | 0.679 | 0.667 | 0.652 |
+| stealthy (fake 5) | 0.658 | 0.651 | 0.609 |
+| stealthy (fake 50) | 0.692 | 0.685 | 0.667 |
+| trim-hugger | 0.666 | 0.618 | 0.597 |
+| switching | 0.390 | 0.412 | 0.467 |
+| sleeper (t = 500) | 0.663 | 0.618 | 0.590 |
+| sleeper (t = 1000) | 0.662 | 0.618 | 0.589 |
+| flicker (25 steps) | 0.421 | 0.398 | 0.352 |
+| RL attacker (vs LF, Phase 4) | 0.898 | 0.849 | 0.858 |
+| RL attacker (best response) | 0.900 | 0.852 | 0.859 |
+
