@@ -12,8 +12,8 @@ This file follows the [research proposal](README.md) as it turns into code and r
 | 3 | Scripted attack benchmark | **Done** (2026-10-30) |
 | 4 | RL attacker | **Done** (2026-10-30) |
 | 5 | Shielded defender + proof | **Done** (2026-10-30) |
-| 6 | Zero-sum training | **Done** (2026-10-30) |
-| 7 | Evaluation | **Done** (2026-10-30) |
+| 6 | Zero-sum training | **Done** (2026-10-30); rerun with the memory + fallback defender (2026-11-03) |
+| 7 | Evaluation | **Done** (2026-10-30); redone on 100 unseen graphs (2026-11-03) |
 | 8 | Paper | Not started |
 
 ## The story so far
@@ -22,7 +22,7 @@ We first rebuilt the setting of Sundaram and Gharesifard [1] and checked that ou
 
 A learned attacker broke through that ceiling. It does 1.3–1.9 times more damage than the best hand-written attack, yet it still cannot push LF out of its safe region (Phase 4). Next we built a learned defender inside a "shield" and proved that it keeps all of LF's guarantees, whatever the network learns. Every experiment agrees with the proof: the shielded defender was never unsafe, while the same defender without the shield was easily captured (Phases 5–7).
 
-The weak point is accuracy. The shielded defender only ties LF, and training it against attackers in a game did not change that (Phase 6). The safety and attack results are therefore solid, but making the defender learn something better than LF is still open. After Phase 7 we tried several training fixes. The shield turned out to leave plenty of room. A defender that gives each node a memory of its neighbours, with an option to fall back to LF, now beats LF on every attack on 100 unseen graphs, by about 6% on average, while staying inside the shield. Its gain also holds against an RL attacker trained specifically against it, and against attacks designed to fool its memory.
+The weak point is accuracy. The shielded defender only ties LF, and training it against attackers in a game did not change that (Phase 6). The safety and attack results are therefore solid, but making the defender learn something better than LF is still open. After Phase 7 we tried several training fixes. The shield turned out to leave plenty of room. A defender that gives each node a memory of its neighbours, with an option to fall back to LF, now beats LF on every attack on 100 unseen graphs, by about 6% on average, while staying inside the shield. Its gain also holds against an RL attacker trained specifically against it, and against attacks designed to fool its memory. Training it further in the attacker–defender game lowers its worst case again. In the final evaluation on 100 unseen graphs, these two learned defenders have the lowest mean and worst-case error of all safe methods (by 6% and 7–12% compared with LF). One trade-off remains: the defender cannot yet be the best against both steady pushes and switching attacks.
 
 ## Repository layout
 
@@ -472,6 +472,72 @@ All methods were safe against every attacker.
 3. **The defender is harder to make swing.** During training the swing attacker reached an oscillation of 2.1 against LF but only 0.6 against the defender (F = 1). In evaluation the defender has the lowest oscillation of the three methods.
 4. **The defender's worst case stays the best of the three on unseen graphs:** 4% below LF at F = 1 and 6% below at F = 2, and 3% and 4% below Su–Vaidya. On the 10 benchmark graphs, Su–Vaidya's worst case is slightly lower (0.516 vs 0.522 at F = 1, 0.849 vs 0.859 at F = 2); the larger set is the more reliable one.
 
+### Closing the switching gap
+
+Su–Vaidya was still slightly better than memory + fallback against the switching attack. We trained three variants of the defender, each like memory + fallback (c = 0.05, diff loss, 300 iterations), and compared them on the 100 unseen graphs (`experiments/defender_switching.py`, results in `results/defender_switching/`):
+- **switching-heavy mix:** the same defender, with extra switching-style attacks in training: stall-switchers with windows of 25, 50 and 100 steps, and flickers with periods of 25 and 50;
+- **two-timescale memory:** a second, slower memory (factor 0.995, about 200 steps) next to the usual one (0.95, about 20 steps);
+- **both together.**
+
+| Method | Switching, F = 1 | Switching, F = 2 | Mean over attacks, F = 1 | Mean over attacks, F = 2 | Wins vs Su–Vaidya, F = 1 / F = 2 |
+|---|---|---|---|---|---|
+| LF | 0.334 | 0.517 | 0.400 | 0.585 | 7 / 2 of 12 |
+| Su–Vaidya | 0.294 | 0.457 | 0.395 | 0.571 | — |
+| memory + fallback | 0.305 | 0.471 | **0.372** | 0.541 | **11 / 11** of 12 |
+| switching-heavy mix | **0.278** | 0.458 | 0.432 | 0.574 | 5 / 4 |
+| two-timescale memory | 0.371 | 0.458 | 0.383 | **0.538** | 11 / 9 |
+| two-timescale + switching-heavy | 0.349 | **0.358** | 0.427 | 0.546 | 3 / 8 |
+
+All variants were safe under every attack.
+
+### What we learned
+
+1. **The gap can be closed, but only at a price.** The switching-heavy mix beats Su–Vaidya on switching at F = 1 and ties it at F = 2. However, it is 7–20% worse than memory + fallback on the steady-push attacks (fixed +50, farthest evader, stealthy), so its mean over attacks is worse than LF's.
+2. **A longer memory alone does not help with switching** at F = 1 (0.371). Combined with the switching-heavy mix it helps a lot at F = 2 (0.358), but not at F = 1.
+3. **No single defender is best at everything.** Against steady pushes, a defender should trust its current view; against switching, it should distrust neighbours that behaved differently before. With one fixed network these pull in opposite directions. Memory + fallback remains the best all-rounder.
+
+## Folding the new defender into the main results
+
+### Phase 6 game with the memory + fallback defender
+
+We reran the zero-sum game (`python experiments/phase6_game.py --defender trust`; results in `results/phase6_trust/`), starting from memory + fallback, with 3 rounds of 150 attacker and 150 defender iterations, scored on the 100 unseen graphs.
+
+The first attempt reused the Phase 5 game settings, including the "ratio" loss. After one round the defender was as easy to attack as LF (0.606 / 0.886). The diff loss is what made memory + fallback work, so the game now uses it for this defender. The failed run is kept in `results/phase6_trust/ratio_loss_run/`.
+
+| Round r | Exploitability, F = 1 | Exploitability, F = 2 |
+|---|---|---|
+| 0 (memory + fallback) | 0.582 | 0.829 |
+| 1 | 0.581 | 0.814 |
+| 2 | 0.574 | 0.821 |
+| 3 (final) | **0.575** | **0.794** |
+| plain LF | 0.609 | 0.889 |
+
+Exploitability is the mean error that the round's best-response attacker causes. Every round was safe. Unlike the Phase 6 game with the shielded defender, which stayed flat at LF's level, this game keeps lowering the worst case: by 1% at F = 1 and 4% at F = 2 over three rounds.
+
+### Phase 7 on 100 unseen graphs
+
+We reran the Phase 7 evaluation on the 100 unseen graphs per F (`python experiments/phase7_eval.py --unseen --switch-variant 'switching-heavy mix'`; results in `results/phase7_unseen/`: `table.md`, `results.json`, `heatmap.png` and `robustness.png`). It covers all 14 methods. Each learned defender faces its own best-response attacker; the three new defenders got new ones here. The safe methods:
+
+| Method | No attack, F = 1 | Mean, F = 1 | Worst case, F = 1 | No attack, F = 2 | Mean, F = 2 | Worst case, F = 2 |
+|---|---|---|---|---|---|---|
+| LF | 0.215 | 0.403 | 0.609 | 0.277 | 0.599 | 0.889 |
+| LF-Metropolis | **0.157** | 0.418 | 0.578 | 0.217 | 0.615 | 0.851 |
+| Su–Vaidya | 0.231 | 0.399 | 0.602 | 0.289 | 0.587 | 0.871 |
+| Shielded RL | 0.216 | 0.401 | 0.608 | 0.277 | 0.596 | 0.887 |
+| Shielded RL (game) | 0.216 | 0.403 | 0.608 | 0.277 | 0.599 | 0.888 |
+| **memory + fallback** | 0.182 | **0.378** | 0.582 | 0.216 | 0.565 | 0.829 |
+| **memory + fallback (game)** | 0.172 | 0.412 | **0.569** | **0.184** | **0.564** | **0.785** |
+| memory + fallback (switching) | 0.181 | 0.435 | 0.599 | 0.192 | 0.602 | 0.814 |
+
+In every case the worst attack is the method's own best-response RL attacker. DGD, both Q-consensus variants, DRC-RSSG and the unshielded defender were unsafe, as before. On the U–W graph, all shielded defenders stay at LF's 0.990, under the bound of 1.
+
+### What we learned
+
+1. **The learned defender now beats every baseline on the main measures.** Memory + fallback has the lowest mean error at F = 1, and its game version has the lowest worst case at both F and the lowest mean at F = 2. Both are safe under every attack. This closes the open half of claim C3 in the proposal: a learned aggregator inside the shield is more accurate than LF and Su–Vaidya, without losing any guarantee.
+2. **The game version trades steady pushes for adaptive attackers.** It is the hardest to exploit: its worst case is 7% below LF at F = 1 and 12% below at F = 2, and at F = 2 it is the best of all methods on switching (0.379, against Su–Vaidya's 0.457). The price is 6–9% more error than LF against steady pushes (fixed +50, farthest evader, stealthy fake 50), which is why its mean at F = 1 (0.412) is above LF's. Which version to report depends on whether the paper stresses the worst case (game) or the average (memory + fallback).
+3. **LF-Metropolis is still the most accurate method without attack at F = 1** (0.157), but it is worse under attack. The new defenders are second (0.172–0.182).
+4. **The U–W bias is not fixed.** No shielded defender moves below LF's 0.990 on the U–W graph. The memory helps against attacks, but it does not correct the centrality bias of finding 2.
+
 ## Findings and decisions
 
 None of these were obvious from the paper, and each one changed how we did later phases.
@@ -485,12 +551,14 @@ None of these were obvious from the paper, and each one changed how we did later
 
 ## Next steps
 
-1. **Fold the memory + fallback defender into the main results.** Rerun the Phase 6 game with it, and update the Phase 7 tables and figures on the 100 unseen graphs.
-2. **Close the switching gap to Su–Vaidya**, for example with more switching-style attacks in training or a longer memory.
+1. **One defender for both steady pushes and switching.** No single trained network was best at both. Options: let the gate also use the slow memory, so the defender only distrusts a neighbour after a change in its behaviour; or train against the steady-push and switching attacks with the constrained loss, which keeps the defender no worse than LF on each attack.
+2. **Fix the U–W bias.** No defender moves below LF's 0.990 on the U–W graph. Training on graphs like U–W, where uniform weights are biased, may teach the weights to correct for centrality (finding 2).
 3. **A tighter measure of room.** The oracle of fix 0 is too strong to be useful. A fairer one would use one set of weights shared across graphs, or compare the safe methods with the |T|/n bound (this needs each graph's maximum F-local set).
 4. **Check Su–Vaidya** against the pseudocode in [5].
 
 ## Changelog
+
+- **2026-11-03.** New defender folded into the main results. Switching variants (`experiments/defender_switching.py`): the gap to Su–Vaidya closes only at a cost on steady pushes, so memory + fallback stays the all-rounder. The Phase 6 game with memory + fallback (`--defender trust`, diff loss) lowers exploitability over 3 rounds to 0.575 / 0.794, against LF's 0.609 / 0.889. Phase 7 on 100 unseen graphs (`--unseen`, `results/phase7_unseen/`): memory + fallback has the lowest mean at F = 1, and its game version the lowest worst case at both F; all safe. The game and switching scripts now resume after a crash, and the switching evaluation and Phase 7 `--unseen` use fewer worker processes to stay within RAM.
 
 - **2026-11-01.** Literature-guided defenders (`experiments/defender_trust.py`): `learn.TrustDefender` (per-neighbour memory + LF fallback gate) and `loss_type="constrained"`; evaluation on 100 unseen graphs per F. Memory + fallback beats LF on all 9 attack settings at F = 1 and 2 (mean −6.3% / −5.8%) and beats Su–Vaidya; all safe. Not yet tested against its own best-response attacker.
 - **2026-11-02.** Stronger attacker search (`experiments/defender_attack_search.py`, `learn.MemoryAwareAttacker`): from-scratch, swing and memory-aware attackers. From-scratch attackers reach the same ceiling as the Phase 4 one; seeing the memory does not help; the defender keeps the lowest worst case on unseen graphs (0.584 / 0.833 vs LF 0.609 / 0.889). All safe.

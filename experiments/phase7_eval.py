@@ -10,10 +10,19 @@ Reported per method: error with no attack, mean and worst case over attacks,
 safety, and the error on the U-W graph against the |T|/n bound of [1, Prop. 8.1].
 Writes results/phase7/{table.md, results.json, heatmap.png, robustness.png}.
     PYTHONPATH=. python3 experiments/phase7_eval.py
+
+``--unseen`` evaluates on 100 unseen graphs per F (the 10 benchmark graphs are
+too few to rank the learned defenders) and adds the memory + fallback defenders
+(``defender_trust``, its Phase 6 game version, and the switching variant named
+by ``--switch-variant``); results go to results/phase7_unseen/. Best-response
+attackers already trained for the benchmark run are reused; missing ones are
+trained.
 """
 
 import argparse
+import importlib.util
 import json
+import os
 from multiprocessing import get_context
 from pathlib import Path
 
@@ -29,10 +38,26 @@ from advagent import learn as Lr
 from advagent import torchsim as ts
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "results" / "phase7"
+UNSEEN = os.environ.get("ADV_P7_UNSEEN") == "1"   # set by --unseen; read again in worker processes
+OUT = ROOT / "results" / ("phase7_unseen" if UNSEEN else "phase7")
+P7 = ROOT / "results" / "phase7"
 P4, P5, P6 = (ROOT / "results" / p for p in ("phase4", "phase5", "phase6"))
 BASE = ["DGD", "LF", "LF-Metropolis", "Su-Vaidya", "Q-consensus", "Q-consensus (fixed beta)", "DRC-RSSG"]
 LEARNED = ["Shielded RL", "Shielded RL (game)", "Shielded RL (no adv. training)", "Unshielded RL"]
+TRUST = ["memory + fallback", "memory + fallback (game)", "memory + fallback (switching)"]
+if UNSEEN:
+    LEARNED = LEARNED + TRUST
+
+
+def experiment(name):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "experiments" / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def instances(F):
+    return Lr.train_pool(F, 100, offset=300_000) if UNSEEN else Lr.eval_instances(F)
 BR = "RL attacker (best response)"
 
 
@@ -45,6 +70,16 @@ def phase5():
 
 
 def learned(name):
+    if name == "memory + fallback":
+        return experiment("defender_trust").load(name)
+    if name == "memory + fallback (game)":
+        pol = Lr.TrustDefender(c=0.05, name=name)
+        pol.load_state_dict(torch.load(ROOT / "results" / "phase6_trust" / "defenders" / "final.pt", map_location="cpu"))
+        return pol.eval()
+    if name == "memory + fallback (switching)":
+        pol = experiment("defender_switching").load(os.environ["ADV_SWITCH_VARIANT"])
+        pol.name = name
+        return pol
     if name == "Shielded RL (game)":
         pol = Lr.ShieldedDefender(shield=True, name=name)
         pol.load_state_dict(torch.load(P6 / "defenders" / "final.pt", map_location="cpu"))
@@ -78,8 +113,17 @@ def br_job(job):
     return name, F
 
 
+def br_path(name, F):
+    if name in BASE:
+        return P4 / "attackers" / f"{fname(name)}_F{F}_bias_random.pt"
+    for d in (OUT, P7):
+        if (d / "attackers" / f"{fname(name)}_F{F}.pt").exists():
+            return d / "attackers" / f"{fname(name)}_F{F}.pt"
+    return OUT / "attackers" / f"{fname(name)}_F{F}.pt"
+
+
 def br_attacker(name, F):
-    path = (P4 / "attackers" / f"{fname(name)}_F{F}_bias_random.pt") if name in BASE else (OUT / "attackers" / f"{fname(name)}_F{F}.pt")
+    path = br_path(name, F)
     if not path.exists():
         return None
     pol = Lr.AttackerPolicy()
@@ -87,19 +131,28 @@ def br_attacker(name, F):
     return pol.eval()
 
 
+def eval_job(job):
+    name, F = job
+    torch.set_num_threads(3)
+    insts = instances(F)
+    fac = factory(name)
+    res = {}
+    with torch.no_grad():
+        for att, af in bench.SCRIPTED.items():
+            res[(name, F, att)] = bench.evaluate(fac, insts, lambda af=af, F=F: af(F))
+        pol = br_attacker(name, F)
+        if pol is not None:
+            runs = [bench.evaluate(fac, insts, lambda dr=dr: Lr.LearnedAttack(pol, direc=dr)) for dr in (1, -1)]
+            pick = np.argmax([runs[0]["error"], runs[1]["error"]], 0)
+            res[(name, F, BR)] = {k: np.where(pick == 0, runs[0][k], runs[1][k]) for k in runs[0]}
+    return res
+
+
 def evaluate_all(methods):
     res = {}
-    for F in (1, 2):
-        insts = Lr.eval_instances(F)
-        for name in methods:
-            fac = factory(name)
-            for att, af in bench.SCRIPTED.items():
-                res[(name, F, att)] = bench.evaluate(fac, insts, lambda af=af, F=F: af(F))
-            pol = br_attacker(name, F)
-            if pol is not None:
-                runs = [bench.evaluate(fac, insts, lambda dr=dr: Lr.LearnedAttack(pol, direc=dr)) for dr in (1, -1)]
-                pick = np.argmax([runs[0]["error"], runs[1]["error"]], 0)
-                res[(name, F, BR)] = {k: np.where(pick == 0, runs[0][k], runs[1][k]) for k in runs[0]}
+    with get_context("spawn").Pool(4 if UNSEEN else 7) as pool:   # memory defenders keep per-step memory: RAM
+        for r in pool.map(eval_job, [(n, F) for F in (1, 2) for n in methods], chunksize=1):
+            res.update(r)
     return res
 
 
@@ -132,7 +185,8 @@ def summarize(res, methods):
 
 def table(res, rows, methods, uwr):
     lines = ["# Phase 7: final evaluation", "",
-             "Phase 3 benchmark instances (10 random 20-node graphs per F, T = 2000). "
+             ("100 unseen random 20-node graphs per F (seeds disjoint from training and from the benchmark), T = 2000. "
+              if UNSEEN else "Phase 3 benchmark instances (10 random 20-node graphs per F, T = 2000). ") +
              f"'{BR}' is an RL attacker trained against that specific method (Phase 4 for the baselines, here for the "
              "learned defenders); it picks the worse push direction per instance. Worst case and mean are over all "
              "attacks except 'none'. Unsafe: some run's hull violation (t ≥ T/2) or α = 0 range excess above 1e−3. "
@@ -192,7 +246,8 @@ def robustness_plot(rows, methods):
         for s in ("top", "right"):
             ax.spines[s].set_visible(False)
     axes[0].legend(fontsize=8, frameon=False, loc="upper center", ncol=3)
-    fig.suptitle("Phase 7: accuracy and robustness of every method (✕ = unsafe or no consensus under some attack)", fontsize=11)
+    fig.suptitle("Phase 7: accuracy and robustness of every method (✕ = unsafe or no consensus under some attack)"
+                 + (", 100 unseen graphs per F" if UNSEEN else ""), fontsize=11)
     fig.savefig(OUT / "robustness.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
@@ -201,12 +256,20 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--br-iters", type=int, default=200)
     ap.add_argument("--skip-br", action="store_true")
+    ap.add_argument("--unseen", action="store_true")
+    ap.add_argument("--switch-variant", default="two-timescale + switching-heavy")
     args = ap.parse_args()
+    if args.unseen and not UNSEEN:   # re-run with the environment set, so worker processes see it too
+        import subprocess
+        import sys
+        env = dict(os.environ, ADV_P7_UNSEEN="1", ADV_SWITCH_VARIANT=args.switch_variant)
+        sys.exit(subprocess.call([sys.executable] + sys.argv, env=env))
     OUT.mkdir(parents=True, exist_ok=True)
     methods = BASE + LEARNED
     if not args.skip_br:
-        with get_context("spawn").Pool(8) as pool:
-            pool.map(br_job, [(n, F, args.br_iters) for n in LEARNED for F in (1, 2)], chunksize=1)
+        todo = [n for n in LEARNED if not all(br_path(n, F).exists() for F in (1, 2))] if UNSEEN else LEARNED
+        with get_context("spawn").Pool(4 if UNSEEN else 8) as pool:
+            pool.map(br_job, [(n, F, args.br_iters) for n in todo for F in (1, 2)], chunksize=1)
     torch.set_num_threads(8)
     res = evaluate_all(methods)
     rows = summarize(res, methods)
@@ -218,6 +281,7 @@ if __name__ == "__main__":
         "summary": {f"{k[0]}|F{k[1]}": v for k, v in rows.items()},
         "uw": {f"{k[0]}|K{k[1]}": v for k, v in uwr.items()}}, indent=1))
     p5 = phase5()
-    p5.heatmap(res, {m: None for m in methods}, OUT / "heatmap.png", "Phase 7: every method against every attack")
+    p5.heatmap(res, {m: None for m in methods}, OUT / "heatmap.png", "Phase 7: every method against every attack"
+               + (" (100 unseen graphs per F)" if UNSEEN else ""))
     robustness_plot(rows, methods)
     print(md)

@@ -123,6 +123,8 @@ class MemoryAwareAttacker(AttackerPolicy):
     def features(self, t, T, at, x, vals, batch, direc, prev_mean, a_prev):
         loc, glob = super().features(t, T, at, x, vals, batch, direc, prev_mean, a_prev)
         mem = getattr(getattr(self, "rule", None), "mem", {}).get(t - 1)
+        if mem is not None:
+            mem = mem[..., :3]   # the shortest-memory channels
         if mem is None:
             extra = torch.zeros(*x.shape, 3, device=x.device, dtype=x.dtype)
         else:
@@ -348,8 +350,8 @@ class ShieldedDefender(nn.Module, ts.Rule):
 class TrustDefender(ShieldedDefender):
     """Shielded defender with a per-neighbour memory and an LF fallback gate.
 
-    For every in-neighbour slot the node keeps exponential averages (factor
-    ``beta``) of how far that neighbour is from it relative to the others,
+    For every in-neighbour slot the node keeps exponential averages (one set
+    per factor in ``betas``) of how far that neighbour is from it relative to the others,
     how often LF trimmed it, and on which side it was. The memory is a
     function of past states only, stored per step so that gradient
     checkpointing replays it exactly. The shield proof allows scores that
@@ -358,9 +360,10 @@ class TrustDefender(ShieldedDefender):
 
     n_feat = ShieldedDefender.n_feat + 3
 
-    def __init__(self, hidden=32, c=0.05, beta=0.95, name="Trust RL"):
+    def __init__(self, hidden=32, c=0.05, betas=(0.95,), name="Trust RL"):
+        self.betas = tuple(betas)
+        self.n_feat = ShieldedDefender.n_feat + 3 * len(self.betas)
         super().__init__(hidden, c, shield=True, name=name)
-        self.beta = beta
         self.gate = mlp(hidden, hidden, 1, depth=1)
         self.mem = {}
 
@@ -374,7 +377,8 @@ class TrustDefender(ShieldedDefender):
             cur = torch.stack([torch.tanh(diff.abs() / typical / 2), (batch.nmask & ~keep).to(x.dtype),
                                torch.sign(diff)], -1)
             prev = self.mem.get(t - 1)
-            m = cur * (1 - self.beta) if prev is None else self.beta * prev + (1 - self.beta) * cur
+            m = torch.cat([cur * (1 - b) if prev is None else b * prev[..., 3 * j: 3 * j + 3] + (1 - b) * cur
+                           for j, b in enumerate(self.betas)], -1)
             self.mem[t] = m
         return torch.cat([torch.zeros_like(m[..., :1, :]), m], -2)
 

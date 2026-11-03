@@ -1,0 +1,56 @@
+# Closing the switching gap
+
+Mean error over 100 unseen graphs per F (T = 2000). Mean is over all attacks except 'none'; 'Wins vs Su–Vaidya' counts attacks (with 'none') on which the method beats Su–Vaidya.
+
+## F = 1
+
+| Method | No attack | Switching | Mean over attacks | Worst attack | Wins vs Su–Vaidya | Safe? |
+|---|---|---|---|---|---|---|
+| LF | 0.215 | 0.334 | 0.400 | 0.609 (RL attacker (vs LF)) | 7/12 | yes |
+| Su-Vaidya | 0.231 | 0.294 | 0.395 | 0.601 (RL attacker (vs LF)) | 0/12 | yes |
+| memory + fallback | 0.182 | 0.305 | 0.372 | 0.583 (RL attacker (vs LF)) | 11/12 | yes |
+| switching-heavy mix | 0.181 | 0.278 | 0.432 | 0.594 (RL attacker (vs LF)) | 5/12 | yes |
+| two-timescale memory | 0.182 | 0.371 | 0.383 | 0.579 (RL attacker (vs LF)) | 11/12 | yes |
+| two-timescale + switching-heavy | 0.179 | 0.349 | 0.427 | 0.602 (RL attacker (vs LF)) | 3/12 | yes |
+
+| Attack | LF | Su-Vaidya | memory + fallback | switching-heavy mix | two-timescale memory | two-timescale + switching-heavy |
+|---|---|---|---|---|---|---|
+| none | 0.215 | 0.231 | 0.182 | 0.181 | 0.182 | 0.179 |
+| fixed +50 | 0.426 | 0.432 | 0.402 | 0.487 | 0.423 | 0.473 |
+| random Byzantine | 0.187 | 0.205 | 0.173 | 0.186 | 0.178 | 0.190 |
+| farthest evader | 0.400 | 0.408 | 0.378 | 0.474 | 0.384 | 0.460 |
+| stealthy (fake 5) | 0.388 | 0.393 | 0.360 | 0.436 | 0.364 | 0.422 |
+| stealthy (fake 50) | 0.426 | 0.432 | 0.409 | 0.513 | 0.421 | 0.490 |
+| trim-hugger | 0.451 | 0.429 | 0.419 | 0.511 | 0.424 | 0.495 |
+| switching | 0.334 | 0.294 | 0.305 | 0.278 | 0.371 | 0.349 |
+| sleeper (t = 500) | 0.448 | 0.429 | 0.414 | 0.499 | 0.416 | 0.489 |
+| sleeper (t = 1000) | 0.447 | 0.429 | 0.414 | 0.500 | 0.415 | 0.486 |
+| flicker (25 steps) | 0.286 | 0.295 | 0.232 | 0.277 | 0.234 | 0.241 |
+| RL attacker (vs LF) | 0.609 | 0.601 | 0.583 | 0.594 | 0.579 | 0.602 |
+
+## F = 2
+
+| Method | No attack | Switching | Mean over attacks | Worst attack | Wins vs Su–Vaidya | Safe? |
+|---|---|---|---|---|---|---|
+| LF | 0.277 | 0.517 | 0.585 | 0.889 (RL attacker (vs LF)) | 2/12 | yes |
+| Su-Vaidya | 0.289 | 0.457 | 0.571 | 0.864 (RL attacker (vs LF)) | 0/12 | yes |
+| memory + fallback | 0.216 | 0.471 | 0.541 | 0.826 (RL attacker (vs LF)) | 11/12 | yes |
+| switching-heavy mix | 0.192 | 0.458 | 0.574 | 0.796 (RL attacker (vs LF)) | 4/12 | yes |
+| two-timescale memory | 0.210 | 0.458 | 0.538 | 0.817 (RL attacker (vs LF)) | 9/12 | yes |
+| two-timescale + switching-heavy | 0.186 | 0.358 | 0.546 | 0.799 (RL attacker (vs LF)) | 8/12 | yes |
+
+| Attack | LF | Su-Vaidya | memory + fallback | switching-heavy mix | two-timescale memory | two-timescale + switching-heavy |
+|---|---|---|---|---|---|---|
+| none | 0.277 | 0.289 | 0.216 | 0.192 | 0.210 | 0.186 |
+| fixed +50 | 0.643 | 0.642 | 0.628 | 0.701 | 0.656 | 0.684 |
+| random Byzantine | 0.239 | 0.259 | 0.202 | 0.183 | 0.203 | 0.179 |
+| farthest evader | 0.629 | 0.626 | 0.618 | 0.707 | 0.617 | 0.684 |
+| stealthy (fake 5) | 0.613 | 0.612 | 0.577 | 0.634 | 0.577 | 0.614 |
+| stealthy (fake 50) | 0.643 | 0.642 | 0.633 | 0.722 | 0.651 | 0.696 |
+| trim-hugger | 0.617 | 0.586 | 0.562 | 0.597 | 0.547 | 0.572 |
+| switching | 0.517 | 0.457 | 0.471 | 0.458 | 0.458 | 0.358 |
+| sleeper (t = 500) | 0.615 | 0.586 | 0.555 | 0.592 | 0.539 | 0.567 |
+| sleeper (t = 1000) | 0.615 | 0.586 | 0.554 | 0.592 | 0.539 | 0.564 |
+| flicker (25 steps) | 0.415 | 0.414 | 0.327 | 0.333 | 0.312 | 0.288 |
+| RL attacker (vs LF) | 0.889 | 0.864 | 0.826 | 0.796 | 0.817 | 0.799 |
+
