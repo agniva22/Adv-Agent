@@ -94,7 +94,16 @@ $$
 
 which is exactly LF's uniform weight over $\{i\} \cup \mathcal{J}_i(t)$, for any $c$. Our policy's last layer starts at zero, so training starts from plain LF.
 
-**The trade-off set by $c$.** The policy controls only the mass $1 - m_i(t)\,\eta_i$ above the floor. A larger $c$ raises the floor $\eta$, which strengthens the consensus rate in the proofs but leaves the policy less freedom. When LF removes nothing ($m_i = \lvert\mathcal{N}_i^-\rvert + 1$), $c = 1$ leaves no freedom at all. A smaller $c$ gives the policy more freedom at the price of a smaller $\eta$. We use $c = 0.25$, so every weight is at least a quarter of $1/(\lvert\mathcal{N}_i^-\rvert + 1)$.
+**Memory and the LF fallback.** The memory + fallback defender (`TrustDefender` in `advagent/learn.py`) adds two things to rule (2), and neither leaves the proposition.
+
+1. *Memory.* Each node keeps a running average of how far each neighbour's value was from its own, how often LF trimmed it, and on which side it was. These averages are extra inputs to the scores. The proposition allows scores that depend on anything, including the history, and its proof uses only properties of the weights at a single step. Scores that depend on memory are therefore covered. The same holds for an attacker that watches the memory (`MemoryAwareAttacker`): the guarantees of [1] hold against any adversary behaviour.
+2. *Fallback.* A gate $g_i(t) \in [0, 1]$, computed from the same inputs, blends the shielded weights with LF's uniform weights:
+$$
+\tilde a_{ij}(t) = g_i(t)\, a_{ij}(t) + \bigl(1 - g_i(t)\bigr)\, \frac{1}{m_i(t)}, \qquad j \in \{i\} \cup \mathcal{J}_i(t),
+$$
+and $\tilde a_{ij}(t) = 0$ otherwise. Both weight vectors have the same support and sum to one. Both are also at least $\eta_i$: for the first this is the proof above, and for the second $1/m_i(t) \ge 1/(\lvert\mathcal{N}_i^-\rvert + 1) \ge \eta_i$, since $c \le 1$. Any convex combination keeps these three properties. So $\tilde a_{ij}(t)$ is again an instance of (1) with bound $\eta$, whatever the gate outputs. As for the scores, the implementation makes the gate's input to the sigmoid finite (`torch.nan_to_num`), so $g_i(t)$ is always defined.
+
+**The trade-off set by $c$.** The policy controls only the mass $1 - m_i(t)\,\eta_i$ above the floor. A larger $c$ raises the floor $\eta$, which strengthens the consensus rate in the proofs but leaves the policy less freedom. When LF removes nothing ($m_i = \lvert\mathcal{N}_i^-\rvert + 1$), $c = 1$ leaves no freedom at all. A smaller $c$ gives the policy more freedom at the price of a smaller $\eta$. The Phase 5 shielded defender uses $c = 0.25$, so every weight is at least a quarter of $1/(\lvert\mathcal{N}_i^-\rvert + 1)$. The memory + fallback defender uses $c = 0.05$. This gives the policy more freedom; the fallback gate can always move it back towards LF.
 
 **Implementation guard.** The proof needs finite scores, since a non-finite score would make the softmax undefined. The implementation therefore replaces NaN and $\pm\infty$ scores before the softmax (`torch.nan_to_num`).
 

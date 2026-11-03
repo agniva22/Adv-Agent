@@ -1,4 +1,4 @@
-git push"""Closing the switching gap: memory + fallback variants trained with more switching attacks and/or a longer memory.
+"""Closing the switching gap: memory + fallback variants trained with more switching attacks and/or a longer memory.
 
 Su–Vaidya is still slightly better than the memory + fallback defender against the
 switching attack. Three variants, each trained like memory + fallback (c = 0.05,

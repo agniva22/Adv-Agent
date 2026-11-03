@@ -42,7 +42,7 @@ UNSEEN = os.environ.get("ADV_P7_UNSEEN") == "1"   # set by --unseen; read again 
 OUT = ROOT / "results" / ("phase7_unseen" if UNSEEN else "phase7")
 P7 = ROOT / "results" / "phase7"
 P4, P5, P6 = (ROOT / "results" / p for p in ("phase4", "phase5", "phase6"))
-BASE = ["DGD", "LF", "LF-Metropolis", "Su-Vaidya", "Q-consensus", "Q-consensus (fixed beta)", "DRC-RSSG"]
+BASE = ["DGD", "LF", "LF-Metropolis", "Su-Vaidya", "Trimmed mean", "Q-consensus", "Q-consensus (fixed beta)", "DRC-RSSG"]
 LEARNED = ["Shielded RL", "Shielded RL (game)", "Shielded RL (no adv. training)", "Unshielded RL"]
 TRUST = ["memory + fallback", "memory + fallback (game)", "memory + fallback (switching)"]
 if UNSEEN:

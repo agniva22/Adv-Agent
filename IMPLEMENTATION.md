@@ -6,7 +6,7 @@ This file follows the [research proposal](README.md) as it turns into code and r
 
 | Phase | What | Status |
 |---|---|---|
-| 0 | Literature check | Partly done (see proposal §3); Scholar sweep still open |
+| 0 | Literature check | Web sweep done (2026-11-03, "Before the paper: checks"); a full Scholar / IEEE Xplore sweep is still open |
 | 1 | Simulator + reproduction of [1] | **Done** (2026-10-28) |
 | 2 | Baselines (DGD, LF, LF-Metropolis, Su–Vaidya, Q-consensus, DRC-RSSG) | **Done** (2026-10-28) |
 | 3 | Scripted attack benchmark | **Done** (2026-10-30) |
@@ -123,6 +123,8 @@ Before trusting the simulator with anything new, we checked that it reproduces t
 
 ## Phase 2: the methods we compare against
 
+> **Note (2026-11-03).** Until 2026-11-03, the method called "Su–Vaidya" here was a simpler trimmed mean, not the algorithm of [5] (see "Su–Vaidya check" below). The numbers in this and the later sections came from that rule, so they are now labelled "Trimmed mean". The real algorithm of [5] was added on 2026-11-03. Its results are in "Su–Vaidya check" and in the Phase 7 table on 100 unseen graphs. The rerun benchmark tables in `results/phase2`, `phase3`, `phase4` and `phase7` include both rules.
+
 With a trusted simulator, we added the methods a new defender has to beat. Two of them, Q-consensus [7] and DRC-RSSG [10], were designed for pure consensus, so we gave them the same gradient step as every other method. We also added LF-Metropolis, a simple variant of our own that keeps LF's filter but changes the weights. It answers an obvious question: does a fixed, smarter weighting already fix LF's bias?
 
 | Method | Source | Implementation notes |
@@ -130,7 +132,8 @@ With a trusted simulator, we added the methods a new defender has to beat. Two o
 | DGD | [3], [4] | Metropolis weights; no defence |
 | LF | [1] | Uniform weights over self + retained set |
 | LF-Metropolis | ours | LF filter, then Metropolis weights on the retained set. Stays inside the shield |
-| Su–Vaidya | [5] | Pools own value with received ones, drops the F largest and F smallest, averages; gradient at x_i(t).|
+| Trimmed mean | (our stand-in for [5] until 2026-11-03) | Pools own value with received ones, drops the F largest and F smallest, averages; gradient at x_i(t).|
+| Su–Vaidya | [5, Alg. 1] | Drops the F largest and F smallest *received* states and averages the rest with its own; nodes also exchange gradients, trim them and step along the midpoint; projection onto [−50, 50]. Added 2026-11-03 (see "Su–Vaidya check"). |
 | Q-consensus | [7], Alg. 2 | Credibility Q_ij ← Q_ij + η(e^(−β_k\|x_j−x_i\|/scale) − Q_ij), with β_k = 10 + 0.1k and η = 0.01 as in [7]; `scale` = 10 for our state range. Also a fixed-β variant (β = 10) as a sensitivity check |
 | DRC-RSSG | [10], Alg. 1 | Optimal Stackelberg weights in closed form, checked against an LP to 4e−16 on 300 random instances. Gets the true attack intensity each step, as [10] assumes. μ = 0.05 |
 
@@ -141,7 +144,7 @@ We ran all of them on 10 random 20-node 3-robust graphs with F = 1, random 1-loc
 | DGD | **0.000** | 40.6 | 1.24 | 0.52 | Yes: captured by fixed attack (hull violation 39.8) |
 | LF | 0.171 | 0.538 | 0.123 | 0.511 | No |
 | LF-Metropolis | 0.166 | 0.527 | **0.096** | **0.472** | No |
-| Su–Vaidya | 0.161 | 0.545 | 0.127 | 0.521 | No |
+| Trimmed mean | 0.161 | 0.545 | 0.127 | 0.521 | No |
 | Q-consensus | 0.193 | 2.19 | 0.231 | 0.183 | Yes: no consensus at all (spread 5.2 with no attack); hull violation 13.4 under fixed attack |
 | Q-consensus, fixed β | **0.080** | **0.072** | 0.123 | 0.552 | Yes: hull violation 4.4 under fixed attack; captured in pure consensus (excess 47) |
 | DRC-RSSG | 0.226 | 0.140 | 0.132 | 0.935 | Yes: leaves the initial range under the evader (excess 1.78) |
@@ -150,8 +153,8 @@ We ran all of them on 10 random 20-node 3-robust graphs with F = 1, random 1-loc
 
 ### What we learned
 
-1. **Only the trimming methods are safe in every scenario.** LF, LF-Metropolis and Su–Vaidya never leave the safe region, while every learned or game-based method fails at least one safety check. This is the evidence behind gap G2.
-2. **DRC-RSSG's safety claim is false, and a small example shows it** (`test_drc_rssg_safety_counterexample`). Take K5, which is 3-robust, so the graph conditions of both [1] and [10] hold, with F = 1 and regular values (10, 9.9, 9.9, 0). One Byzantine node sends 19 to the top node. DRC-RSSG drops the value farthest from the node's own, which is the honest 0 (distance 10) rather than the 19 (distance 9). After one step the top node sits at 12.8, outside the interval [0, 10] that [10, Problem 1, Thm. 1] claims never changes, while LF and Su–Vaidya stay at 9.93. This confirms the doubt about Prop. 1 case (ii) raised in the proposal. It also hints at how a good attacker should behave: be extreme, but never the most extreme.
+1. **Only the trimming methods are safe in every scenario.** LF, LF-Metropolis and Trimmed mean never leave the safe region, while every learned or game-based method fails at least one safety check. This is the evidence behind gap G2.
+2. **DRC-RSSG's safety claim is false, and a small example shows it** (`test_drc_rssg_safety_counterexample`). Take K5, which is 3-robust, so the graph conditions of both [1] and [10] hold, with F = 1 and regular values (10, 9.9, 9.9, 0). One Byzantine node sends 19 to the top node. DRC-RSSG drops the value farthest from the node's own, which is the honest 0 (distance 10) rather than the 19 (distance 9). After one step the top node sits at 12.8, outside the interval [0, 10] that [10, Problem 1, Thm. 1] claims never changes, while LF and Trimmed mean stay at 9.93. This confirms the doubt about Prop. 1 case (ii) raised in the proposal. It also hints at how a good attacker should behave: be extreme, but never the most extreme.
 3. **Q-consensus falls apart once agents want different things.** Its trust score, e^(−β_k·distance), shrinks a little more every step because β_k keeps growing. Eventually every neighbour looks untrustworthy, the nodes stop listening to each other, and they never agree. With a fixed β it is accurate but can be captured. In its own pure-consensus setting it works (`test_q_consensus_reaches_consensus_in_its_own_setting`), so this is a property of the method rather than a bug in our code.
 4. **Fixed reweighting is not enough.** On one graph in Phase 1, Metropolis weights helped LF a lot, but averaged over 10 graphs the gain is small (0.166 vs 0.171 with no attack, 0.096 vs 0.123 under random Byzantine). A fixed rule cannot follow the filter's kept set as it changes, and following it is exactly the job we want a learned policy to do. So the bar for RQ3 is "beat LF-Metropolis", not just "beat LF".
 5. **The choice of attack decides the ranking.** DRC-RSSG looks like the most accurate method under the fixed attack and the least accurate under the evader. Evaluations with a single attack, as in [7] and [10], can therefore be misleading, which is one more reason to train against a learned attacker later.
@@ -175,7 +178,7 @@ Mean error, F = 1:
 | DGD | 0.000 | 39.5 ⚠ | 1.23 ⚠ | 0.500 | 0.387 | 3.92 ⚠ | 0.300 | 0.194 |
 | LF | 0.137 | 0.277 | 0.147 | 0.257 | 0.250 | 0.277 | 0.303 | 0.245 |
 | LF-Metropolis | 0.123 | 0.397 | 0.097 | 0.370 | 0.289 | 0.397 | 0.384 | 0.421 |
-| Su–Vaidya | 0.141 | 0.269 | 0.154 | 0.251 | 0.241 | 0.269 | 0.266 | 0.242 |
+| Trimmed mean | 0.141 | 0.269 | 0.154 | 0.251 | 0.241 | 0.269 | 0.266 | 0.242 |
 | Q-consensus | 0.123 ∅ | 1.28 ⚠ | 0.226 ⚠ | 0.205 ∅ | 0.204 ⚠ | 0.145 ∅ | 0.221 ∅ | 0.557 ∅ |
 | Q-consensus, fixed β | 0.138 | 0.134 ⚠ | 0.203 ⚠ | 0.337 | 0.255 | 1.82 | 0.225 | 0.282 |
 | DRC-RSSG | 0.202 | 0.140 | 0.150 | 0.491 ⚠ | 0.280 | 0.140 | 0.310 | 0.225 |
@@ -187,7 +190,7 @@ Mean error, F = 2:
 | DGD | 0.000 | 44.7 ⚠ | 1.41 ⚠ | 1.00 | 0.655 | 6.63 ⚠ | 0.398 | 0.266 |
 | LF | 0.291 | 0.692 | 0.213 | 0.679 | 0.658 | 0.692 | 0.666 | 0.390 |
 | LF-Metropolis | 0.242 | 0.794 | 0.162 | 0.777 | 0.656 | 0.794 | 0.682 | 0.459 |
-| Su–Vaidya | 0.288 | 0.685 | 0.211 | 0.667 | 0.651 | 0.685 | 0.618 | 0.412 |
+| Trimmed mean | 0.288 | 0.685 | 0.211 | 0.667 | 0.651 | 0.685 | 0.618 | 0.412 |
 | Q-consensus | 0.162 ∅ | 1.51 ⚠ | 0.194 ⚠ | 0.152 ∅ | 0.292 ⚠ | 0.185 ⚠ | 0.265 ∅ | 0.929 ∅ |
 | Q-consensus, fixed β | 0.106 | 0.102 ⚠ | 0.189 ⚠ | 0.797 | 0.565 | 2.27 ⚠ | 0.365 | 0.181 |
 | DRC-RSSG | 0.402 | 0.200 | 0.210 | 0.974 ⚠ | 0.640 | 0.200 | 0.701 | 0.432 |
@@ -201,7 +204,7 @@ We also ran the special graphs of [1]:
 | DGD | 0.002 | 0 | 0.000 |
 | LF | 13.9 | 25 | 0.990 |
 | LF-Metropolis | 17.0 | 28 | 0.947 |
-| Su–Vaidya | 16.8 | 34 | 0.993 |
+| Trimmed mean | 16.8 | 34 | 0.993 |
 | Q-consensus | 3.96 | 2 | 0.910 |
 | Q-consensus, fixed β | 0.045 | 0 | 0.696 |
 | DRC-RSSG | 12.4 | 24 | 0.993 |
@@ -212,12 +215,12 @@ We also ran the special graphs of [1]:
 
 ### What we learned
 
-1. **The trimming methods survive everything we wrote.** LF, LF-Metropolis and Su–Vaidya stayed safe under all 8 attacks for both F = 1 and F = 2, with 0 unsafe runs out of 480. Thm. 7.1 holds even against attacks built to sit right at the filter's edge.
+1. **The trimming methods survive everything we wrote.** LF, LF-Metropolis and Trimmed mean stayed safe under all 8 attacks for both F = 1 and F = 2, with 0 unsafe runs out of 480. Thm. 7.1 holds even against attacks built to sit right at the filter's edge.
 2. **The stealthy attack hurts everyone, even the method with no defence.** A plausible fake minimizer (fake 5) costs DGD 0.39 (F = 1) and 0.66 (F = 2), about as much as it costs LF. Nobody can filter this damage away. Against LF, stealthy fake 50 gives exactly the same error as fixed +50, because LF trims an extreme value no matter what story comes with it.
 3. **Clever hand-written attacks are barely stronger than a simple one.** Against LF, trim-hugger reaches 0.303 against 0.277 for fixed +50 at F = 1, and at F = 2 it is even slightly weaker (0.666 vs 0.692). Hand design seems to hit a ceiling, and Phase 4 asks whether that ceiling is real or just a limit of our ideas.
-4. **Switching causes oscillation rather than a fixed error.** On random graphs the mean keeps swinging across about 1.4 units and never settles (figure above). The final error then depends on when you stop, so we report oscillation (TV) next to error, as the proposal planned. On the Ex. 7.2 graph the attack breaks LF-Metropolis, Su–Vaidya and DRC-RSSG as well as LF.
+4. **Switching causes oscillation rather than a fixed error.** On random graphs the mean keeps swinging across about 1.4 units and never settles (figure above). The final error then depends on when you stop, so we report oscillation (TV) next to error, as the proposal planned. On the Ex. 7.2 graph the attack breaks LF-Metropolis, Trimmed mean and DRC-RSSG as well as LF.
 5. **LF-Metropolis is worse than LF under most attacks.** Under fixed +50 it reaches 0.40 against 0.28 (F = 1) and 0.79 against 0.69 (F = 2). It only wins with no attack or random noise, and its final spread is about twice LF's (0.31 vs 0.16), so its nodes agree more slowly. A fixed reweighting helps in some cases and hurts in others, which is another argument for weights that adapt to the attack.
-6. **The |T|/n lower bound is tight on the U–W graph.** LF, LF-Metropolis, Su–Vaidya and DRC-RSSG all end within about 5% of b/4, and only the unsafe Q-consensus variants get below it. On that graph no safe method, including ours, can do much better, so any room for a learned defender has to come from graphs where the safe methods sit well above the bound.
+6. **The |T|/n lower bound is tight on the U–W graph.** LF, LF-Metropolis, Trimmed mean and DRC-RSSG all end within about 5% of b/4, and only the unsafe Q-consensus variants get below it. On that graph no safe method, including ours, can do much better, so any room for a learned defender has to come from graphs where the safe methods sit well above the bound.
 7. **Going from F = 1 to F = 2 roughly doubles or triples the error** of every safe method (LF: 0.28 → 0.69 under fixed +50).
 
 ## Phase 4: a learned attacker
@@ -239,14 +242,14 @@ We then tested it on the same instances as Phase 3 (full table: [results/phase4/
 |---|---|---|---|---|---|
 | LF | 1 | 0.303 | **0.539** | 1.78× | No |
 | LF-Metropolis | 1 | 0.421 | **0.529** | 1.26× | No |
-| Su–Vaidya | 1 | 0.269 | **0.517** | 1.92× | No |
+| Trimmed mean | 1 | 0.269 | **0.517** | 1.92× | No |
 | DRC-RSSG | 1 | 0.491 | **0.666** | 1.35× | No |
 | Q-consensus | 1 | 1.28 | **10.6** | 8.2× | Yes: hull violation 44 |
 | Q-consensus, fixed β | 1 | 1.82 | 1.36 | 0.75× | (excess 0.07) |
 | DGD | 1 | 39.5 | 22.7 | 0.57× | Yes (as with scripted) |
 | LF | 2 | 0.692 | **0.898** | 1.30× | No |
 | LF-Metropolis | 2 | 0.794 | **0.897** | 1.13× | No |
-| Su–Vaidya | 2 | 0.685 | **0.852** | 1.24× | No |
+| Trimmed mean | 2 | 0.685 | **0.852** | 1.24× | No |
 | DRC-RSSG | 2 | 0.974 | **1.144** | 1.17× | No |
 
 The oscillation attacker was less convincing. Against LF on the Ex. 7.2 graph it reached a total variation of 20.2, compared with 11.3 for scripted switching, but only when it acted randomly. Its deterministic policy reached just 0.11. On random graphs it reached 0.76, below scripted switching (1.79).
@@ -256,7 +259,7 @@ The oscillation attacker was less convincing. Against LF on the Ex. 7.2 graph it
 ### What we learned
 
 1. **The ceiling from Phase 3 was a limit of our ideas, not a real limit.** Against the safe trimming methods the learned attacker does 1.3–1.9 times more damage than the best hand-written attack at F = 1, and 1.1–1.3 times more at F = 2. This answers RQ1: a learned attacker finds damage that hand design misses.
-2. **Thm. 7.1 still holds against it.** Even though it was trained to do as much damage as possible, the attacker never pushed LF, LF-Metropolis or Su–Vaidya out of the hull or the initial range.
+2. **Thm. 7.1 still holds against it.** Even though it was trained to do as much damage as possible, the attacker never pushed LF, LF-Metropolis or Trimmed mean out of the hull or the initial range.
 3. **Methods without a guarantee break far more.** Against Q-consensus the error grows from 1.28 to 10.6, with a hull violation of 44. When there is a hole, the learned attacker finds it.
 4. **The learned attacker is not the strongest everywhere.** Against DGD and fixed-β Q-consensus, the plain fixed +50 and stealthy attacks do more damage, because the band action keeps values close to the regular range by design. A fair evaluation should therefore report the worst of scripted and learned attacks, which is what Phase 7 does.
 5. **Oscillation is harder to learn than bias.** The learned oscillation attacker only beats scripted switching through randomness, not by learning when to switch, so the scripted switching attack stays the reference for oscillation.
@@ -278,7 +281,7 @@ All three were tested on the Phase 3 instances (full table: [results/phase5/tabl
 |---|---|---|---|---|---|---|
 | LF | 0.137 | 0.286 | 0.539 | 0.611 | 0.898 | No |
 | LF-Metropolis | 0.123 | 0.361 | 0.529 | 0.651 | 0.884 | No |
-| Su–Vaidya | 0.141 | 0.275 | 0.516 | 0.598 | 0.849 | No |
+| Trimmed mean | 0.141 | 0.275 | 0.516 | 0.598 | 0.849 | No |
 | **Shielded RL** | 0.137 | 0.284 | 0.540 | 0.605 | 0.897 | **No** |
 | Shielded RL (no adv. training) | 0.118 | 0.306 | 0.524 | 0.622 | 0.905 | No |
 | Unshielded RL | 0.137 | 5.56 | 0.554 | 6.74 | 0.837 | **Yes**: error 39 / 45 under fixed +50 |
@@ -328,7 +331,7 @@ Summary, F = 1 (mean error):
 | DGD | 0.000 | 8.59 | 39.5 (fixed +50) | No |
 | LF | 0.137 | 0.286 | 0.539 (RL) | Yes |
 | LF-Metropolis | 0.123 | 0.361 | 0.529 (RL) | Yes |
-| Su–Vaidya | 0.141 | **0.275** | **0.517** (RL) | Yes |
+| Trimmed mean | 0.141 | **0.275** | **0.517** (RL) | Yes |
 | Q-consensus | 0.123 | 1.95 | 12.8 (RL) | No |
 | Q-consensus, fixed β | 0.138 | 0.572 | 1.82 (stealthy 50) | No |
 | DRC-RSSG | 0.202 | 0.300 | 0.666 (RL) | No (evader) |
@@ -337,7 +340,7 @@ Summary, F = 1 (mean error):
 | Shielded RL (no adv. training) | **0.118** | 0.307 | 0.528 (RL) | Yes |
 | Unshielded RL | 0.137 | 5.73 | 39.0 (fixed +50) | No |
 
-F = 2 tells the same story. Among the safe methods, LF reaches 0.611 / 0.898 (mean / worst), Su–Vaidya 0.598 / 0.852 and the game-trained shielded defender 0.607 / 0.900, while the unshielded defender reaches 8.15 / 44.6. On the U–W graph every safe method ends at 0.95–0.99, right at the b/4 = 1 bound.
+F = 2 tells the same story. Among the safe methods, LF reaches 0.611 / 0.898 (mean / worst), Trimmed mean 0.598 / 0.852 and the game-trained shielded defender 0.607 / 0.900, while the unshielded defender reaches 8.15 / 44.6. On the U–W graph every safe method ends at 0.95–0.99, right at the b/4 = 1 bound.
 
 ![Phase 7 robustness](results/phase7/robustness.png)
 
@@ -347,7 +350,7 @@ F = 2 tells the same story. Among the safe methods, LF reaches 0.611 / 0.898 (me
 
 1. **Only the trimming methods and the shielded defenders are safe everywhere.** All four non-trimming baselines and the unshielded defender fail at least one safety check. This is the clearest result of the project. The shield turns any learned policy into one that is safe both in theory and in practice (the theorem half of C3), while the uncertified defences [7] and [10] fail the stress test (C2).
 2. **Against every safe method, the strongest attack is the learned one.** The best-response RL attacker does 1.3–1.9 times more damage than the best hand-written attack at F = 1, and 1.1–1.3 times more at F = 2. Benchmarks that only use hand-written attacks underestimate the risk (C1).
-3. **Learning has not improved accuracy yet.** The shielded defenders tie LF within 1%, Su–Vaidya is still slightly better, and the game-trained defender is no better than the Phase 5 one. The only gain is the no-attack error of the defender trained without adversaries (0.118 vs 0.137), and it loses that gain under attack.
+3. **Learning has not improved accuracy yet.** The shielded defenders tie LF within 1%, Trimmed mean is still slightly better, and the game-trained defender is no better than the Phase 5 one. The only gain is the no-attack error of the defender trained without adversaries (0.118 vs 0.137), and it loses that gain under attack.
 4. **The unshielded defender shows why the shield is needed.** It is accurate against attacks inside the trimming band (trim-hugger: 0.21 vs 0.30 for LF). However, a constant +50 attack captures it (error 39), and its own best-response attacker reaches 2.0 at F = 1 and 12.3 at F = 2.
 5. **What this means for the paper.** C1, C2 and the theorem half of C3 are supported. The learned-aggregator half of C3 (lower error) and C4 are not. We either need a better-trained defender (Next steps, item 1) or a different framing, in which the shield is a safe envelope that lets future learned rules be deployed without risk.
 
@@ -373,7 +376,7 @@ Each variant was trained for 300 iterations on the Phase 5 training mix and test
 | Method | F = 1 no attack | F = 1 mean / worst | F = 2 no attack | F = 2 mean / worst |
 |---|---|---|---|---|
 | LF | 0.137 | 0.286 / 0.539 | 0.291 | 0.611 / 0.898 |
-| Su–Vaidya | 0.141 | 0.275 / 0.516 | 0.288 | 0.598 / 0.849 |
+| Trimmed mean | 0.141 | 0.275 / 0.516 | 0.288 | 0.598 / 0.849 |
 | Shielded RL (Phase 5) | 0.137 | 0.284 / 0.540 | 0.291 | 0.605 / 0.897 |
 | fix 1 | 0.112 | 0.317 / 0.515 | 0.281 | 0.625 / 0.874 |
 | fix 1 + 4 | 0.114 | 0.311 / 0.524 | 0.275 | 0.625 / 0.877 |
@@ -408,7 +411,7 @@ All three use c = 0.05, the diff loss and 300 iterations.
 | Method | F = 1 no attack | F = 1 mean (vs LF) | F = 1 wins | F = 2 no attack | F = 2 mean (vs LF) | F = 2 wins |
 |---|---|---|---|---|---|---|
 | LF | 0.215 | 0.403 | – | 0.277 | 0.599 | – |
-| Su–Vaidya | 0.231 | 0.399 (−0.8%) | 3/9 | 0.289 | 0.586 (−2.1%) | 7/9 |
+| Trimmed mean | 0.231 | 0.399 (−0.8%) | 3/9 | 0.289 | 0.586 (−2.1%) | 7/9 |
 | fix 1 + 4 (above) | 0.184 | 0.385 (−4.4%) | 9/9 | 0.224 | 0.575 (−4.1%) | 7/9 |
 | **memory + fallback** | **0.182** | **0.377 (−6.3%)** | **9/9** | **0.217** | **0.565 (−5.8%)** | **9/9** |
 | constrained | 0.185 | 0.389 (−3.4%) | 7/9 | 0.229 | 0.581 (−3.0%) | 6/9 |
@@ -419,13 +422,13 @@ Every method was safe on every graph. On the 10 benchmark graphs, memory + fallb
 ### What we learned
 
 1. **For the first time, a learned defender beats LF across the board.** On 100 unseen graphs, memory + fallback is better than LF on all 9 attack settings at both F = 1 and F = 2. Its mean error over attacks is 6.3% and 5.8% lower, and its no-attack error is 15% and 22% lower. Against LF the error difference per graph is −0.025 ± 0.017 at F = 1 and −0.035 ± 0.023 at F = 2 (± 2 standard errors), and the defender is better on 62 of the 100 graphs in each case.
-2. **It also beats Su–Vaidya on average** (−0.8% and −2.1% vs LF on the same graphs). It now improves on every attack where LF was weak, including the constant +50 attack that hurt the earlier fixes.
+2. **It also beats Trimmed mean on average** (−0.8% and −2.1% vs LF on the same graphs). It now improves on every attack where LF was weak, including the constant +50 attack that hurt the earlier fixes.
 3. **Memory is what helps; the constraint does not.** The penalty made training more cautious and the result worse. Combining it with memory lost most of the gain.
 4. **Caveat (tested below): these attacks were not chosen against this defender.** The RL attacker here was trained against LF. Before we claim a robust gain, the defender has to face its own best-response attacker, as in Phase 7. A defender with memory may also be open to new attacks that exploit the memory, for example behaving honestly for a long time and then striking.
 
 ### Against its own best-response attacker
 
-We repeated the Phase 7 test for the memory + fallback defender (`experiments/defender_br.py`, results in `results/defender_br/`). We trained an RL attacker against it for 200 PPO iterations, warm-started from the Phase 4 LF attacker. For a fair budget, LF got the same 200 extra iterations, and Su–Vaidya kept its Phase 4 attacker. We also added two hand-written attacks aimed at the memory:
+We repeated the Phase 7 test for the memory + fallback defender (`experiments/defender_br.py`, results in `results/defender_br/`). We trained an RL attacker against it for 200 PPO iterations, warm-started from the Phase 4 LF attacker. For a fair budget, LF got the same 200 extra iterations, and Trimmed mean kept its Phase 4 attacker. We also added two hand-written attacks aimed at the memory:
 - **sleeper:** behaves honestly, then trim-hugs from t = 500 or t = 1000;
 - **flicker:** alternates honest and trim-hugging every 25 steps, which is a little longer than the memory's ~20-step horizon.
 
@@ -434,17 +437,17 @@ We repeated the Phase 7 test for the memory + fallback defender (`experiments/de
 | Method | F = 1 no attack | F = 1 mean | F = 1 worst | F = 2 no attack | F = 2 mean | F = 2 worst |
 |---|---|---|---|---|---|---|
 | LF | 0.215 | 0.418 | 0.609 | 0.277 | 0.610 | 0.889 |
-| Su–Vaidya | 0.231 | 0.413 | 0.602 | 0.289 | 0.596 | 0.871 |
+| Trimmed mean | 0.231 | 0.413 | 0.602 | 0.289 | 0.596 | 0.871 |
 | **memory + fallback** | **0.182** | **0.389** | **0.583** | **0.216** | **0.565** | **0.828** |
 
 All methods were safe in every run. The first GPU run crashed with a CUDA launch failure, a driver fault, part-way through training; the run reported here was done on the CPU.
 
 ### What we learned
 
-1. **The gain survives the best-response attacker.** The defender's worst case, which is its own best-response attacker, is 4% lower than LF's at F = 1 and 7% lower at F = 2. It is also lower than Su–Vaidya's. It has the lowest no-attack error, mean error and worst-case error of the three methods.
+1. **The gain survives the best-response attacker.** The defender's worst case, which is its own best-response attacker, is 4% lower than LF's at F = 1 and 7% lower at F = 2. It is also lower than Trimmed mean's. It has the lowest no-attack error, mean error and worst-case error of the three methods.
 2. **The memory cannot be exploited by these attacks.** Sleeper attacks do less damage to the defender than to LF. Flicker is where the defender gains most, at 19–21% below LF: a neighbour that keeps changing its behaviour is exactly what the memory notices.
 3. **The best-response attacker did not get stronger.** Over 200 iterations its training curve stayed flat, against LF and against the defender alike. The Phase 4 attacker therefore seems to be a local optimum for PPO, and our "best response" is only as strong as PPO can make it. A stronger test would train an attacker from scratch, use the oscillation objective, or add an attack that looks at the defender's memory.
-4. **The remaining weak spot is switching.** On the 100 unseen graphs the defender beats LF on switching but not Su–Vaidya (0.305 vs 0.294 at F = 1). On the 10 benchmark graphs it is worse than both on switching.
+4. **The remaining weak spot is switching.** On the 100 unseen graphs the defender beats LF on switching but not Trimmed mean (0.305 vs 0.294 at F = 1). On the 10 benchmark graphs it is worse than both on switching.
 
 ### A stronger attacker search
 
@@ -460,7 +463,7 @@ From scratch and swing were trained against LF as well, for a fair budget. Every
 | Method | F = 1 | F = 2 | Swing: oscillation of x̄, F = 1 / F = 2 |
 |---|---|---|---|
 | LF | 0.609 | 0.889 | 5.05 / 1.12 |
-| Su–Vaidya | 0.602 | 0.866 | 4.78 / 1.03 |
+| Trimmed mean | 0.602 | 0.866 | 4.78 / 1.03 |
 | **memory + fallback** | **0.584** | **0.833** | **4.75 / 1.03** |
 
 All methods were safe against every attacker.
@@ -470,19 +473,19 @@ All methods were safe against every attacker.
 1. **The attack ceiling is real, not a training failure.** The from-scratch attackers start at a bias of about 0.1 and climb to the same strength as the Phase 4 attacker (about 0.61 / 0.89 against LF, and 0.58 / 0.82 against the defender). Two independent searches end at the same level, so this is close to the most a band attacker can do.
 2. **Seeing the memory does not help the attacker.** The memory-aware attacker stayed flat during training and ends within 0.005 of the plain one. Against these attackers, the memory gives nothing away.
 3. **The defender is harder to make swing.** During training the swing attacker reached an oscillation of 2.1 against LF but only 0.6 against the defender (F = 1). In evaluation the defender has the lowest oscillation of the three methods.
-4. **The defender's worst case stays the best of the three on unseen graphs:** 4% below LF at F = 1 and 6% below at F = 2, and 3% and 4% below Su–Vaidya. On the 10 benchmark graphs, Su–Vaidya's worst case is slightly lower (0.516 vs 0.522 at F = 1, 0.849 vs 0.859 at F = 2); the larger set is the more reliable one.
+4. **The defender's worst case stays the best of the three on unseen graphs:** 4% below LF at F = 1 and 6% below at F = 2, and 3% and 4% below Trimmed mean. On the 10 benchmark graphs, Trimmed mean's worst case is slightly lower (0.516 vs 0.522 at F = 1, 0.849 vs 0.859 at F = 2); the larger set is the more reliable one.
 
 ### Closing the switching gap
 
-Su–Vaidya was still slightly better than memory + fallback against the switching attack. We trained three variants of the defender, each like memory + fallback (c = 0.05, diff loss, 300 iterations), and compared them on the 100 unseen graphs (`experiments/defender_switching.py`, results in `results/defender_switching/`):
+Trimmed mean was still slightly better than memory + fallback against the switching attack. We trained three variants of the defender, each like memory + fallback (c = 0.05, diff loss, 300 iterations), and compared them on the 100 unseen graphs (`experiments/defender_switching.py`, results in `results/defender_switching/`):
 - **switching-heavy mix:** the same defender, with extra switching-style attacks in training: stall-switchers with windows of 25, 50 and 100 steps, and flickers with periods of 25 and 50;
 - **two-timescale memory:** a second, slower memory (factor 0.995, about 200 steps) next to the usual one (0.95, about 20 steps);
 - **both together.**
 
-| Method | Switching, F = 1 | Switching, F = 2 | Mean over attacks, F = 1 | Mean over attacks, F = 2 | Wins vs Su–Vaidya, F = 1 / F = 2 |
+| Method | Switching, F = 1 | Switching, F = 2 | Mean over attacks, F = 1 | Mean over attacks, F = 2 | Wins vs Trimmed mean, F = 1 / F = 2 |
 |---|---|---|---|---|---|
 | LF | 0.334 | 0.517 | 0.400 | 0.585 | 7 / 2 of 12 |
-| Su–Vaidya | 0.294 | 0.457 | 0.395 | 0.571 | — |
+| Trimmed mean | 0.294 | 0.457 | 0.395 | 0.571 | — |
 | memory + fallback | 0.305 | 0.471 | **0.372** | 0.541 | **11 / 11** of 12 |
 | switching-heavy mix | **0.278** | 0.458 | 0.432 | 0.574 | 5 / 4 |
 | two-timescale memory | 0.371 | 0.458 | 0.383 | **0.538** | 11 / 9 |
@@ -492,7 +495,7 @@ All variants were safe under every attack.
 
 ### What we learned
 
-1. **The gap can be closed, but only at a price.** The switching-heavy mix beats Su–Vaidya on switching at F = 1 and ties it at F = 2. However, it is 7–20% worse than memory + fallback on the steady-push attacks (fixed +50, farthest evader, stealthy), so its mean over attacks is worse than LF's.
+1. **The gap can be closed, but only at a price.** The switching-heavy mix beats Trimmed mean on switching at F = 1 and ties it at F = 2. However, it is 7–20% worse than memory + fallback on the steady-push attacks (fixed +50, farthest evader, stealthy), so its mean over attacks is worse than LF's.
 2. **A longer memory alone does not help with switching** at F = 1 (0.371). Combined with the switching-heavy mix it helps a lot at F = 2 (0.358), but not at F = 1.
 3. **No single defender is best at everything.** Against steady pushes, a defender should trust its current view; against switching, it should distrust neighbours that behaved differently before. With one fixed network these pull in opposite directions. Memory + fallback remains the best all-rounder.
 
@@ -522,7 +525,8 @@ We reran the Phase 7 evaluation on the 100 unseen graphs per F (`python experime
 |---|---|---|---|---|---|---|
 | LF | 0.215 | 0.403 | 0.609 | 0.277 | 0.599 | 0.889 |
 | LF-Metropolis | **0.157** | 0.418 | 0.578 | 0.217 | 0.615 | 0.851 |
-| Su–Vaidya | 0.231 | 0.399 | 0.602 | 0.289 | 0.587 | 0.871 |
+| Su–Vaidya [5] (rerun 2026-11-03) | 0.220 | 0.447 | 0.672 | 0.249 | 0.599 | 0.953 |
+| Trimmed mean | 0.231 | 0.399 | 0.602 | 0.289 | 0.587 | 0.871 |
 | Shielded RL | 0.216 | 0.401 | 0.608 | 0.277 | 0.596 | 0.887 |
 | Shielded RL (game) | 0.216 | 0.403 | 0.608 | 0.277 | 0.599 | 0.888 |
 | **memory + fallback** | 0.182 | **0.378** | 0.582 | 0.216 | 0.565 | 0.829 |
@@ -533,10 +537,62 @@ In every case the worst attack is the method's own best-response RL attacker. DG
 
 ### What we learned
 
-1. **The learned defender now beats every baseline on the main measures.** Memory + fallback has the lowest mean error at F = 1, and its game version has the lowest worst case at both F and the lowest mean at F = 2. Both are safe under every attack. This closes the open half of claim C3 in the proposal: a learned aggregator inside the shield is more accurate than LF and Su–Vaidya, without losing any guarantee.
-2. **The game version trades steady pushes for adaptive attackers.** It is the hardest to exploit: its worst case is 7% below LF at F = 1 and 12% below at F = 2, and at F = 2 it is the best of all methods on switching (0.379, against Su–Vaidya's 0.457). The price is 6–9% more error than LF against steady pushes (fixed +50, farthest evader, stealthy fake 50), which is why its mean at F = 1 (0.412) is above LF's. Which version to report depends on whether the paper stresses the worst case (game) or the average (memory + fallback).
+1. **The learned defender now beats every baseline on the main measures.** Memory + fallback has the lowest mean error at F = 1, and its game version has the lowest worst case at both F and the lowest mean at F = 2. Both are safe under every attack. This closes the open half of claim C3 in the proposal: a learned aggregator inside the shield is more accurate than LF and Trimmed mean, without losing any guarantee.
+2. **The game version trades steady pushes for adaptive attackers.** It is the hardest to exploit: its worst case is 7% below LF at F = 1 and 12% below at F = 2, and at F = 2 it is the best of all methods on switching (0.379, against Trimmed mean's 0.457). The price is 6–9% more error than LF against steady pushes (fixed +50, farthest evader, stealthy fake 50), which is why its mean at F = 1 (0.412) is above LF's. Which version to report depends on whether the paper stresses the worst case (game) or the average (memory + fallback).
 3. **LF-Metropolis is still the most accurate method without attack at F = 1** (0.157), but it is worse under attack. The new defenders are second (0.172–0.182).
 4. **The U–W bias is not fixed.** No shielded defender moves below LF's 0.990 on the U–W graph. The memory helps against attacks, but it does not correct the centrality bias of finding 2.
+
+## Before the paper: checks
+
+### Literature sweep (Phase 0)
+
+Before writing, we checked whether anyone has already published what we claim. This was a web search (2026-11-03), not a full Google Scholar or IEEE Xplore sweep. Some papers were judged from their abstracts and should be read in full before the paper cites them.
+
+| Line of work | Closest papers | How it differs from ours |
+|---|---|---|
+| Learned consensus weights | Q-consensus, Hou et al., AAAI 2021 [7] ([pdf](https://cdn.aaai.org/ojs/16945/16945-13-20439-1-2-20210518.pdf)) | No trimming filter and no safety proof. It is one of our baselines, and it is unsafe in Phases 2–7. |
+| Trust-based resilient optimization | Yemini, Gil and co-authors ([Harvard thesis](https://dash.harvard.edu/entities/publication/25ca06bf-ce7e-4960-babb-f5bdb2c437af), [arXiv 2212.02459](https://arxiv.org/html/2212.02459)); RP3 ([arXiv 2407.06541](https://arxiv.org/html/2407.06541)) | Trust comes from *physical* side observations, such as wireless signals, not from the exchanged values. This is what lets them tolerate more than half of the agents being malicious. Our memory uses only the values, needs no extra sensing, and the weights are learned. |
+| Learnable aggregation weights | Parsa et al., ICLR 2026 ([arXiv 2511.03529](https://arxiv.org/pdf/2511.03529)) | Federated, with a central server. The weights are learned jointly with the model, and robustness is shown through the objective. There is no network and no trimming filter. As far as the abstract shows, it has no guarantee that holds for every possible set of weights. |
+| GNN trust scores on top of a robust aggregator | GRAB-FL, *Neural Comput. Appl.* 2026 ([link](https://link.springer.com/article/10.1007/s00521-026-12446-9)) | Federated, empirical. It is the closest in spirit to the shield idea (learned weights layered over a robust rule), but it has no proof and no distributed optimization over a network. |
+| RL-trained robust aggregation | GAAvernor ([pdf](https://nesa.zju.edu.cn/download/Justinian's%20GAAvernor%20Robust%20Distributed%20Learning%20with%20Gradient%20Aggregation%20Agent.pdf)) | Server-side and centralized, using auxiliary server data. |
+| Robust decentralized learning, hand-designed | ClippedGossip ([arXiv 2202.01545](https://arxiv.org/pdf/2202.01545)), IOS ([arXiv 2206.04568](https://arxiv.org/pdf/2206.04568)), UBAR, Byzantine-robust gossip ([arXiv 2410.10418](https://arxiv.org/pdf/2410.10418)) | Fixed rules, so they are possible extra baselines. ClippedGossip's "dissensus" attack is a hand-written attack that our learned attacker should be compared with. |
+| W-MSR / LF in multi-agent RL | Resilient consensus-based MARL ([arXiv 2111.06776](https://arxiv.org/pdf/2111.06776)) | Uses trimming to protect RL training, the reverse of our direction (RL to improve trimming). |
+| Learned attackers | (none found) | We found no paper that trains an RL attacker against trimming rules in distributed optimization. |
+
+**Conclusion.** We found no prior work on our three main claims: (i) a learned aggregator *inside* the LF filter, with a proof that [1]'s guarantees hold for every policy; (ii) a trust memory built only from exchanged values and learned end to end; and (iii) an RL attacker, and an attacker–defender game, against trimming rules. The nearest papers (Parsa et al. 2026, GRAB-FL 2026, the trust-based line) should be cited and contrasted in the related-work section. ClippedGossip and IOS could be added as baselines. Still to do before submission: a Google Scholar / IEEE Xplore sweep of papers citing [1] and [7], and a full reading of Parsa et al. and GRAB-FL.
+
+### Su–Vaidya check
+
+We read Algorithm 1 of [5] (TAC 2021, [accepted version](https://parsa.epfl.ch/course-info/cs723/papers/byzantine.pdf)) and compared it with `baselines.SuVaidya` / `torchsim.SuVaidya`. Our version differs in two ways:
+
+1. **State trimming.** [5] trims the b largest and b smallest of the *received* estimates, then averages the rest together with the node's own estimate, which is always kept: `Average(Trim(D_i^x[t]) ∪ {x_i[t−1]})`, over d_i − 2b + 1 values. Our version pools the node's own value with the received ones before trimming, so the node's own value can be trimmed away.
+2. **Gradient.** In [5], nodes also *exchange gradients*. Each node trims the received gradients together with its own and steps along the midpoint `½(max + min)` of the rest, then projects onto a compact set X. Our version uses only the node's own gradient, with no projection.
+
+[5] also assumes a stricter graph condition: every reduced graph has a non-empty source component, because a Byzantine node may send different values to different neighbours. Our "Su–Vaidya" is therefore a simpler trimmed-mean rule, not [5]'s algorithm. The fix:
+- implement Algorithm 1, letting adversaries send fake gradients as well as fake states;
+- keep the current rule under a new name ("trimmed mean, own value pooled");
+- rerun every comparison that includes it: Phases 2–3, the Phase 4 attacker against it, and Phase 7 on the unseen graphs.
+
+The learned defender and the LF attackers do not depend on Su–Vaidya and are unchanged.
+
+**Results with the real algorithm (2026-11-03).** We implemented [5, Alg. 1] in both simulators (`baselines.SuVaidya`, `torchsim.SuVaidya`; the old rule is now `TrimmedMean`, "Trimmed mean"). The simulators give a rule that sets `exchanges_gradients` the neighbours' gradients, each evaluated at the sender's own state. Adversaries also send fake gradients. By default, an adversary that pushes receiver i up sends the smallest honest gradient in i's pool, and one that pushes down sends the largest, so the lie is never trimmed (`dynamics.gradient_lie`, `torchsim.gradient_lie`). The stealthy attack sends honest gradients of its fake objective. The NumPy and torch versions agree in the tests. We then reran Phases 2 and 3, the Phase 4 attacker against Su–Vaidya (the old attacker is kept for the trimmed mean), and Phase 7 on both the benchmark and the 100 unseen graphs.
+
+Mean error on 100 unseen graphs per F:
+
+| Method | No attack, F = 1 | Mean, F = 1 | Worst case, F = 1 | No attack, F = 2 | Mean, F = 2 | Worst case, F = 2 |
+|---|---|---|---|---|---|---|
+| LF | 0.215 | 0.403 | 0.609 | 0.277 | 0.599 | 0.889 |
+| Su–Vaidya [5] | 0.220 | 0.447 | 0.672 | 0.249 | 0.599 | 0.953 |
+| Trimmed mean (old stand-in) | 0.231 | 0.399 | 0.602 | 0.289 | 0.587 | 0.871 |
+| memory + fallback | 0.182 | **0.378** | 0.582 | 0.216 | 0.565 | 0.829 |
+| memory + fallback (game) | **0.172** | 0.412 | **0.569** | **0.184** | **0.564** | **0.785** |
+
+### What we learned
+
+1. **The real Su–Vaidya is safe, but weaker than LF under attack.** Its worst case is 10% above LF's at F = 1 and 7% above at F = 2. Exchanging gradients gives the adversaries a second channel: even a fake gradient that survives trimming moves the midpoint step. Without attack it is better than LF at F = 2 (0.249 vs 0.277), and on the benchmark its final spread is about half of LF's.
+2. **It is strongest where the adversary's values look honest.** At F = 2 it beats memory + fallback on stealthy (fake 50) (0.597 vs 0.633) and switching (0.437 vs 0.471). Against steady pushes (fixed +50, farthest evader) it is the weakest safe method.
+3. **Our conclusions get stronger.** Both memory + fallback defenders beat the real Su–Vaidya on mean and worst case at both F. The earlier "beats Su–Vaidya" statements were made against the trimmed mean, which is the stronger of the two rules under attack, so they still hold.
+4. **Caveat.** The learned attackers control only the values they send; their fake gradients follow the fixed rule above. An attacker that also learned its gradients could only do more damage to Su–Vaidya, so its numbers here are a lower bound on how far it can be pushed.
 
 ## Findings and decisions
 
@@ -554,9 +610,13 @@ None of these were obvious from the paper, and each one changed how we did later
 1. **One defender for both steady pushes and switching.** No single trained network was best at both. Options: let the gate also use the slow memory, so the defender only distrusts a neighbour after a change in its behaviour; or train against the steady-push and switching attacks with the constrained loss, which keeps the defender no worse than LF on each attack.
 2. **Fix the U–W bias.** No defender moves below LF's 0.990 on the U–W graph. Training on graphs like U–W, where uniform weights are biased, may teach the weights to correct for centrality (finding 2).
 3. **A tighter measure of room.** The oracle of fix 0 is too strong to be useful. A fairer one would use one set of weights shared across graphs, or compare the safe methods with the |T|/n bound (this needs each graph's maximum F-local set).
-4. **Check Su–Vaidya** against the pseudocode in [5].
+4. **Optional extra baselines:** ClippedGossip and IOS (see the literature sweep).
 
 ## Changelog
+
+- **2026-11-03 (3).** Real Su–Vaidya [5, Alg. 1] with gradient exchange and default gradient lies (`exchanges_gradients`, `gradient_lie`, `torchsim.descend`); old rule kept as "Trimmed mean". Phases 2–3, the Phase 4 Su–Vaidya attacker and Phase 7 (benchmark and unseen) rerun. On unseen graphs the real Su–Vaidya is safe but worse than LF under attack (worst 0.672 / 0.953 vs 0.609 / 0.889); the memory + fallback defenders beat it on mean and worst case. Older sections relabelled "Trimmed mean". Removed a stray `git push` from the first line of `experiments/defender_switching.py`.
+
+- **2026-11-03 (2).** Shield theorem: added a remark that memory-dependent scores and the LF fallback gate stay inside the proposition; added a NaN guard on the gate and 10 tests for the memory + fallback defender (117 tests pass). Web literature sweep: no prior work found on our three main claims. Su–Vaidya check: our implementation is a simpler trimmed mean, not [5]'s Algorithm 1 (which trims received states only and exchanges trimmed gradients), so it must be replaced.
 
 - **2026-11-03.** New defender folded into the main results. Switching variants (`experiments/defender_switching.py`): the gap to Su–Vaidya closes only at a cost on steady pushes, so memory + fallback stays the all-rounder. The Phase 6 game with memory + fallback (`--defender trust`, diff loss) lowers exploitability over 3 rounds to 0.575 / 0.794, against LF's 0.609 / 0.889. Phase 7 on 100 unseen graphs (`--unseen`, `results/phase7_unseen/`): memory + fallback has the lowest mean at F = 1, and its game version the lowest worst case at both F; all safe. The game and switching scripts now resume after a crash, and the switching evaluation and Phase 7 `--unseen` use fewer worker processes to stay within RAM.
 

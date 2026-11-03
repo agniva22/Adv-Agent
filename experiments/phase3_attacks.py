@@ -35,6 +35,7 @@ METHODS = {
     "LF": lambda F: d.LF(F),
     "LF-Metropolis": lambda F: B.LFMetropolis(F),
     "Su-Vaidya": lambda F: B.SuVaidya(F),
+    "Trimmed mean": lambda F: B.TrimmedMean(F),
     "Q-consensus": lambda F: B.QConsensus(scale=10.0),
     "Q-consensus (fixed beta)": lambda F: B.QConsensus(beta1=0.0, scale=10.0),
     "DRC-RSSG": lambda F: B.DRCRSSG(F),

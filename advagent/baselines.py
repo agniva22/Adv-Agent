@@ -33,15 +33,15 @@ class LFMetropolis:
         return own + (w * (vals[keep] - own)).sum()
 
 
-class SuVaidya:
-    """Trimmed-mean update of Su & Vaidya [5].
+class TrimmedMean:
+    """A simple trimmed-mean update (until 2026-11-03 this stood in for Su-Vaidya [5]).
 
     Pool the node's own value with the received ones, drop the F largest and F
     smallest of the pool, average the rest, and take the gradient step at the
     node's current state x_i(t) rather than at the average.
     """
 
-    name = "Su-Vaidya"
+    name = "Trimmed mean"
     grad_at_own = True
 
     def __init__(self, F):
@@ -52,6 +52,34 @@ class SuVaidya:
         if pool.size <= 2 * self.F:
             return own
         return pool[self.F: pool.size - self.F].mean()
+
+
+class SuVaidya:
+    """Byzantine-resilient gradient descent of Su & Vaidya [5, Alg. 1].
+
+    Nodes exchange states and gradients (each evaluated at the sender's own
+    state). Node i drops the b = F largest and F smallest received states and
+    averages the rest together with its own state (always kept); it pools the
+    received gradients with its own, drops the F largest and F smallest, and
+    takes the midpoint of what is left; then x_i <- P_X[x_tilde - alpha_t g_tilde]
+    with X = [-50, 50]. ``dynamics.simulate`` calls ``update`` instead of the
+    usual aggregate-then-descend step because ``exchanges_gradients`` is set.
+    """
+
+    name = "Su-Vaidya"
+    exchanges_gradients = True
+
+    def __init__(self, F, X=(-50.0, 50.0)):
+        self.F, self.X = F, X
+
+    def update(self, i, own, vals, g_own, gvals, at, ctx):
+        b = self.F
+        if vals.size < 2 * b + 1:
+            return own
+        kept = np.sort(vals)[b: vals.size - b]
+        xt = (own + kept.sum()) / (kept.size + 1)
+        gp = np.sort(np.append(gvals, g_own))[b: gvals.size + 1 - b]
+        return float(np.clip(xt - at * 0.5 * (gp[0] + gp[-1]), *self.X))
 
 
 class QConsensus:

@@ -145,8 +145,10 @@ class LFMetropolis(Rule):
         return x + (w * (vals - x[..., None])).sum(-1)
 
 
-class SuVaidya(Rule):
-    name = "Su-Vaidya"
+class TrimmedMean(Rule):
+    """Batched ``baselines.TrimmedMean`` (the stand-in for Su-Vaidya until 2026-11-03)."""
+
+    name = "Trimmed mean"
     grad_at_own = True
 
     def aggregate(self, x, vals, batch, t, at):
@@ -159,6 +161,26 @@ class SuVaidya(Rule):
         cnt = mid.sum(-1)
         y = torch.where(mid, pool, 0).sum(-1) / cnt.clamp(min=1)
         return torch.where(cnt > 0, y, x)
+
+
+class SuVaidya(Rule):
+    """Batched ``baselines.SuVaidya``: [5, Alg. 1] with gradient exchange."""
+
+    name = "Su-Vaidya"
+    exchanges_gradients = True
+
+    def update(self, x, vals, g, gvals, batch, t, at):
+        inf = torch.tensor(float("inf"), device=x.device, dtype=x.dtype)
+        F, deg = batch.F, batch.deg[..., None]
+        k = torch.arange(batch.d + 1, device=x.device)
+        rv = torch.where(batch.nmask, vals, inf).sort(-1).values          # received states, padding last
+        mid = (k[: batch.d] >= F) & (k[: batch.d] < deg - F)
+        xt = (x + torch.where(mid, rv, 0).sum(-1)) / (mid.sum(-1) + 1)
+        gp = torch.cat([g[..., None], torch.where(batch.nmask, gvals, inf)], -1).sort(-1).values
+        lo = gp.gather(-1, F.expand(-1, batch.n, 1))[..., 0]               # min of the trimmed pool
+        hi = gp.gather(-1, (deg.long() - F).clamp(min=0))[..., 0]          # max: index deg + 1 - F - 1
+        xn = (xt - at * 0.5 * (lo + hi)).clamp(-VMAX, VMAX)
+        return torch.where(batch.deg >= 2 * F[..., 0] + 1, xn, x)
 
 
 class QConsensus(Rule):
@@ -207,7 +229,7 @@ class DRCRSSG(Rule):
 
 
 BASELINES = {
-    "DGD": DGD, "LF": LF, "LF-Metropolis": LFMetropolis, "Su-Vaidya": SuVaidya,
+    "DGD": DGD, "LF": LF, "LF-Metropolis": LFMetropolis, "Su-Vaidya": SuVaidya, "Trimmed mean": TrimmedMean,
     "Q-consensus": QConsensus,
     "Q-consensus (fixed beta)": lambda: QConsensus(beta1=0.0, name="Q-consensus (fixed beta)"),
     "DRC-RSSG": DRCRSSG,
@@ -344,10 +366,30 @@ def step(t, x, batch, rule, alpha, attack, astate):
     if attack is not None:
         av, astate = attack(t, x, vals, batch, astate)
         vals = torch.where(batch.from_adv, av, vals)
-    at = alpha(t)
+    return torch.where(batch.reg, descend(rule, x, vals, batch, t, alpha(t), attack is not None), x), astate
+
+
+def gradient_lie(x, g, vals, gvals, batch):
+    """Batched ``dynamics.gradient_lie``: per slot, the extreme honest gradient
+    in the receiver's pool on the side that helps the adversary's push."""
+    regslot = batch.nmask & ~batch.from_adv
+    inf = torch.tensor(float("inf"), device=x.device, dtype=x.dtype)
+    gmin = torch.minimum(torch.where(regslot, gvals, inf).amin(-1), g)
+    gmax = torch.maximum(torch.where(regslot, gvals, -inf).amax(-1), g)
+    push = torch.sign(vals - x[..., None])
+    return torch.where(push > 0, gmin[..., None], torch.where(push < 0, gmax[..., None], g[..., None]))
+
+
+def descend(rule, x, vals, batch, t, at, attacked=True):
+    """New states of all nodes given the received values (regular rows are used)."""
+    if getattr(rule, "exchanges_gradients", False):
+        g = batch.grad(x)                                   # each node's gradient at its own state
+        gvals = batch.gather(g)
+        if attacked:
+            gvals = torch.where(batch.from_adv, gradient_lie(x, g, vals, gvals, batch), gvals)
+        return rule.update(x, vals, g, gvals, batch, t, at)
     y = rule.aggregate(x, vals, batch, t, at)
-    xn = y - at * batch.grad(x if rule.grad_at_own else y)
-    return torch.where(batch.reg, xn, x), astate
+    return y - at * batch.grad(x if rule.grad_at_own else y)
 
 
 def run(batch, rule, T, alpha, attack=None, burn=None, ckpt=0):

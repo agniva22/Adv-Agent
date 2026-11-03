@@ -34,8 +34,8 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "phase4"
 T = 2000
 K_OSC = 50   # an oscillation attacker decides every 50 steps
-F1 = ["DGD", "LF", "LF-Metropolis", "Su-Vaidya", "Q-consensus", "Q-consensus (fixed beta)", "DRC-RSSG"]
-F2 = ["LF", "LF-Metropolis", "Su-Vaidya", "DRC-RSSG"]
+F1 = ["DGD", "LF", "LF-Metropolis", "Su-Vaidya", "Trimmed mean", "Q-consensus", "Q-consensus (fixed beta)", "DRC-RSSG"]
+F2 = ["LF", "LF-Metropolis", "Su-Vaidya", "Trimmed mean", "DRC-RSSG"]
 
 
 def ex72_instance():
@@ -151,7 +151,7 @@ def report(results):
     return "\n".join(lines)
 
 
-COLORS = {"DGD": "#5b5b5b", "LF": "#2a78d6", "LF-Metropolis": "#1baf7a", "Su-Vaidya": "#eda100",
+COLORS = {"DGD": "#5b5b5b", "LF": "#2a78d6", "LF-Metropolis": "#1baf7a", "Su-Vaidya": "#eda100", "Trimmed mean": "#8a6d00",
           "Q-consensus": "#b3477a", "Q-consensus (fixed beta)": "#e87ba4", "DRC-RSSG": "#eb6834"}
 
 
@@ -178,15 +178,21 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--iters", type=int, default=300)
     ap.add_argument("--procs", type=int, default=6)
+    ap.add_argument("--methods", nargs="+", help="retrain only these bias attackers; merge into results.json")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     jobs = [(m, 1, "bias", "random", args.iters, 0) for m in F1]
     jobs += [(m, 2, "bias", "random", args.iters, 0) for m in F2]
     jobs += [("LF", 1, "oscillation", "random", args.iters, 0), ("LF", 1, "oscillation", "ex72", args.iters, 0)]
+    if args.methods:
+        jobs = [j for j in jobs if j[0] in args.methods and j[2] == "bias"]
     with get_context("spawn").Pool(args.procs) as pool:
         results = pool.map(train_job, jobs, chunksize=1)
     for r in results:
         r["iters"] = args.iters
+    if args.methods:
+        old = json.loads((OUT / "results.json").read_text())
+        results = [r for r in old if not (r["method"] in args.methods and r["objective"] == "bias")] + results
     (OUT / "results.json").write_text(json.dumps(results, indent=1))
     curves(results)
     print(report(results))

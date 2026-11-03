@@ -108,6 +108,23 @@ class Result:
         return float(abs(self.mean[-1] - self.x_star))
 
 
+def gradient_lie(x, recv, ctx):
+    """Default fake gradients for rules that exchange gradients (Su-Vaidya [5]).
+
+    An adversary pushing receiver i up (its value above x_i) sends the smallest
+    honest gradient in i's pool (own and regular in-neighbours), which moves
+    i up the most without being trimmed; pushing down, the largest. Returns
+    an (n, |A|) array: row i is what node i receives from each adversary.
+    """
+    adj, adv, reg, g = ctx["adj"], ctx["adv"], ctx["regular"], ctx["grads"]
+    out = np.broadcast_to(g[:, None], (x.size, adv.size)).copy()
+    for i in np.flatnonzero(reg):
+        pool = np.append(g[adj[i] & reg], g[i])
+        push = np.sign(recv[i, adv] - x[i])
+        out[i] = np.where(push > 0, pool.min(), np.where(push < 0, pool.max(), g[i]))
+    return out
+
+
 def simulate(adj, funcs, x0, rule, T, alpha, adversaries=(), attack=None, seed=0):
     """Run T synchronous steps.
 
@@ -128,6 +145,7 @@ def simulate(adj, funcs, x0, rule, T, alpha, adversaries=(), attack=None, seed=0
         rule.reset(ctx)
     # Gradient at the consensus point y_i as in [1]; Su-Vaidya [5] uses x_i(t).
     grad_at_own = getattr(rule, "grad_at_own", False)
+    exchange = getattr(rule, "exchanges_gradients", False)
 
     X = np.empty((T + 1, n))
     X[0] = x0
@@ -135,10 +153,20 @@ def simulate(adj, funcs, x0, rule, T, alpha, adversaries=(), attack=None, seed=0
         ctx["t"] = t
         x = X[t]
         recv = np.broadcast_to(x, (n, n)).copy()  # recv[i, j]: value i gets from j
+        if exchange:
+            ctx["grads"] = funcs.grad(x)          # each node's gradient at its own state
         if adv.size:
             sent = np.asarray(attack(t, x, ctx), dtype=float)
             recv[:, adv] = sent if sent.ndim == 2 else np.broadcast_to(sent, (n, adv.size))
             X[t + 1, adv] = sent if sent.ndim == 1 else sent.mean(axis=0)
+        if exchange:
+            grecv = np.broadcast_to(ctx["grads"], (n, n)).copy()
+            if adv.size:
+                lie = attack.grads(t, x, ctx) if hasattr(attack, "grads") else gradient_lie(x, recv, ctx)
+                grecv[:, adv] = lie if np.ndim(lie) == 2 else np.broadcast_to(lie, (n, adv.size))
+            X[t + 1, reg_idx] = [rule.update(i, x[i], recv[i, nbrs[i]], ctx["grads"][i], grecv[i, nbrs[i]], alpha(t), ctx)
+                                 for i in reg_idx]
+            continue
         y = np.array([rule.aggregate(i, x[i], recv[i, nbrs[i]], ctx) for i in reg_idx])
         g_at = x[reg_idx] if grad_at_own else y
         X[t + 1, reg_idx] = y - alpha(t) * funcs.grad(g_at, reg_idx)

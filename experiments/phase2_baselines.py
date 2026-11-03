@@ -31,6 +31,7 @@ METHODS = {
     "LF": lambda: d.LF(F),
     "LF-Metropolis": lambda: B.LFMetropolis(F),
     "Su-Vaidya": lambda: B.SuVaidya(F),
+    "Trimmed mean": lambda: B.TrimmedMean(F),
     "Q-consensus": lambda: B.QConsensus(scale=10.0),
     "Q-consensus (fixed beta)": lambda: B.QConsensus(beta1=0.0, scale=10.0),
     "DRC-RSSG": lambda: B.DRCRSSG(F),
@@ -85,7 +86,7 @@ def table(rows):
 
 
 def figure(rows):
-    colors = {"DGD": "#eb6834", "LF": "#2a78d6", "LF-Metropolis": "#1baf7a", "Su-Vaidya": "#eda100",
+    colors = {"DGD": "#eb6834", "LF": "#2a78d6", "LF-Metropolis": "#1baf7a", "Su-Vaidya": "#eda100", "Trimmed mean": "#8a6d00",
               "Q-consensus": "#e87ba4", "Q-consensus (fixed beta)": "#b3477a", "DRC-RSSG": "#008300"}
     fig, axes = plt.subplots(1, len(ATTACKS), figsize=(12, 3.6), sharey=True)
     for ax, attack in zip(axes, ATTACKS):

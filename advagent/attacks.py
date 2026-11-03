@@ -109,11 +109,22 @@ class Stealthy:
         # x[adv] holds what adversaries sent last step; they see each other's current state.
         x = x.copy()
         x[adv] = self.z
+        L = ctx["funcs"].L
+        if getattr(rule, "exchanges_gradients", False):
+            # Honest gradients of the fake objective, at the state each adversary sends.
+            g = ctx["grads"].copy()
+            g[adv] = np.clip(2 * (self.z - self.fake), -L, L)
+            self.gsent = g[adv]
+            self.z = np.array([rule.update(a, z, x[ctx["nbrs"][a]], g[a], g[ctx["nbrs"][a]], self.alpha(t), ctx)
+                               for a, z in zip(adv, self.z)])
+            return sent
         y = np.array([rule.aggregate(a, z, x[ctx["nbrs"][a]], ctx) for a, z in zip(adv, self.z)])
         at = self.z if getattr(rule, "grad_at_own", False) else y
-        L = ctx["funcs"].L
         self.z = y - self.alpha(t) * np.clip(2 * (at - self.fake), -L, L)
         return sent
+
+    def grads(self, t, x, ctx):
+        return self.gsent
 
 
 class TrimHugger:

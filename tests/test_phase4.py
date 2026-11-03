@@ -15,7 +15,7 @@ from advagent.functions import LocalFunctions
 T = 200
 NP_RULES = {
     "DGD": lambda F: d.DGD(), "LF": lambda F: d.LF(F), "LF-Metropolis": lambda F: B.LFMetropolis(F),
-    "Su-Vaidya": lambda F: B.SuVaidya(F), "Q-consensus": lambda F: B.QConsensus(scale=10.0),
+    "Su-Vaidya": lambda F: B.SuVaidya(F), "Trimmed mean": lambda F: B.TrimmedMean(F), "Q-consensus": lambda F: B.QConsensus(scale=10.0),
     "Q-consensus (fixed beta)": lambda F: B.QConsensus(beta1=0.0, scale=10.0), "DRC-RSSG": lambda F: B.DRCRSSG(F),
 }
 # (numpy attack factory, torch attack factory)
@@ -55,7 +55,7 @@ def test_torch_matches_numpy(F, method, attack):
         assert r["hull_violation"][b].item() == pytest.approx(np_r.hull_violation(T // 2), abs=1e-9)
 
 
-@pytest.mark.parametrize("method", ["DGD", "LF", "Su-Vaidya"])
+@pytest.mark.parametrize("method", ["DGD", "LF", "Su-Vaidya", "Trimmed mean"])
 def test_torch_stealthy_matches_numpy(method):
     insts = instances(1)
     batch = ts.Batch(ts.stealthy(insts, 5.0), dtype=torch.float64)

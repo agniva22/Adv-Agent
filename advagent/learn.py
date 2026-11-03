@@ -201,10 +201,8 @@ def attacker_rollout(policy, batch, rule, T, alpha, k, direc, objective="bias"):
             prev, m_start = batch.mean(x), batch.mean(x)
         av, _ = ts.band(a, x, vals, batch)
         vals = torch.where(batch.from_adv, av[..., None], vals)
-        at = alpha(t)
-        y = rule.aggregate(x, vals, batch, t, at)
         m_old = batch.mean(x)
-        x = torch.where(batch.reg, y - at * batch.grad(x if rule.grad_at_own else y), x)
+        x = torch.where(batch.reg, ts.descend(rule, x, vals, batch, t, alpha(t)), x)
         if t >= T // 2:
             osc = osc + (batch.mean(x) - m_old).abs()
         if (t + 1) % k == 0 or t + 1 == T:
@@ -337,7 +335,7 @@ class ShieldedDefender(nn.Module, ts.Rule):
         if getattr(self, "gate", None) is not None:
             # Fallback: blend with LF's uniform weights. Both are valid shield
             # weights (>= eta_i, sum 1), so any convex combination is too.
-            g = torch.sigmoid(self.gate(pooled[..., 0, :]))      # (B, n, 1)
+            g = torch.sigmoid(torch.nan_to_num(self.gate(pooled[..., 0, :])))   # (B, n, 1); finite, so g in [0, 1]
             lf = mask / mask.sum(-1, keepdim=True)
             w = g * w + (1 - g) * lf
         return w, mask

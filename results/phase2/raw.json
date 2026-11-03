@@ -111,6 +111,42 @@
   "seed": 0,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.034926764625269335,
+  "spread": 0.06446963888458157,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 0,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.619302110521643,
+  "spread": 0.07081639385258587,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 0,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.0026812081337908023,
+  "spread": 0.08552977547775797,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 0,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.6069566763524081,
+  "spread": 0.07231398474023609,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 0,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.10762425583051849,
   "spread": 0.13792555951180874,
   "hull_violation": 0.0,
@@ -118,7 +154,7 @@
  },
  {
   "seed": 0,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.7675097691562878,
   "spread": 0.14137700489718252,
@@ -127,7 +163,7 @@
  },
  {
   "seed": 0,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.1581407325670623,
   "spread": 0.1422818190289452,
@@ -136,7 +172,7 @@
  },
  {
   "seed": 0,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.7249416632409293,
   "spread": 0.1438932892776208,
@@ -363,6 +399,42 @@
   "seed": 1,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.022227035353100666,
+  "spread": 0.07504835733450499,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 1,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.18591737023464106,
+  "spread": 0.03970903662829017,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 1,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.16417417746963814,
+  "spread": 0.03481356557233628,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 1,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.17880792400709122,
+  "spread": 0.03962016343998398,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 1,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.34520227952935245,
   "spread": 0.15666623089049436,
   "hull_violation": 0.0,
@@ -370,7 +442,7 @@
  },
  {
   "seed": 1,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.4311263327571606,
   "spread": 0.09669734643159389,
@@ -379,7 +451,7 @@
  },
  {
   "seed": 1,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.14450299251697607,
   "spread": 0.10814742534446087,
@@ -388,7 +460,7 @@
  },
  {
   "seed": 1,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.4153307087821716,
   "spread": 0.09955763707692511,
@@ -615,6 +687,42 @@
   "seed": 2,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.16687581121708023,
+  "spread": 0.06319972222056275,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 2,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.29052241060241235,
+  "spread": 0.07533807103432089,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 2,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.20107894595686238,
+  "spread": 0.0842145921932872,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 2,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.28315202495822167,
+  "spread": 0.0754057987582013,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 2,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.06658606657459398,
   "spread": 0.12165425175663486,
   "hull_violation": 0.0,
@@ -622,7 +730,7 @@
  },
  {
   "seed": 2,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.27502430084074936,
   "spread": 0.11802307731818784,
@@ -631,7 +739,7 @@
  },
  {
   "seed": 2,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.036106645342339316,
   "spread": 0.12438195844993216,
@@ -640,7 +748,7 @@
  },
  {
   "seed": 2,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.2612364471497898,
   "spread": 0.11849629339693502,
@@ -867,6 +975,42 @@
   "seed": 3,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.07301824113899863,
+  "spread": 0.05762369103156145,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 3,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.22093087681041168,
+  "spread": 0.05527586395554629,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 3,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.15095238114524345,
+  "spread": 0.03872499578889782,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 3,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.20599459722037572,
+  "spread": 0.055233044963056144,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 3,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.4274530703696127,
   "spread": 0.14571644371765857,
   "hull_violation": 0.0,
@@ -874,7 +1018,7 @@
  },
  {
   "seed": 3,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.6846514030961907,
   "spread": 0.14853636732125874,
@@ -883,7 +1027,7 @@
  },
  {
   "seed": 3,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.20313411321112051,
   "spread": 0.12704010829807266,
@@ -892,7 +1036,7 @@
  },
  {
   "seed": 3,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.658351760722612,
   "spread": 0.15053531340032333,
@@ -1119,6 +1263,42 @@
   "seed": 4,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.18624405715289968,
+  "spread": 0.07506467972676995,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 4,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.48170912339097305,
+  "spread": 0.06533037555061855,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 4,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.11200067012357749,
+  "spread": 0.06756805536731841,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 4,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.4786687848842799,
+  "spread": 0.06554461747009338,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 4,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.21902100949584583,
   "spread": 0.11925400413461261,
   "hull_violation": 0.0,
@@ -1126,7 +1306,7 @@
  },
  {
   "seed": 4,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.580362482547162,
   "spread": 0.11718493900415072,
@@ -1135,7 +1315,7 @@
  },
  {
   "seed": 4,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.25325549384548673,
   "spread": 0.11918383315131253,
@@ -1144,7 +1324,7 @@
  },
  {
   "seed": 4,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.5632981173820936,
   "spread": 0.11730387152264504,
@@ -1371,6 +1551,42 @@
   "seed": 5,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.09264261474718227,
+  "spread": 0.03846835108859459,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 5,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.4309329995611324,
+  "spread": 0.0729280621567665,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 5,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.19538395355919924,
+  "spread": 0.09081839411864334,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 5,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.41530361757416867,
+  "spread": 0.07207094667612735,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 5,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.08128781630255011,
   "spread": 0.09823284736132942,
   "hull_violation": 0.0,
@@ -1378,7 +1594,7 @@
  },
  {
   "seed": 5,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.6906486991843479,
   "spread": 0.10110209153133409,
@@ -1387,7 +1603,7 @@
  },
  {
   "seed": 5,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.21841433311757563,
   "spread": 0.09751198592730081,
@@ -1396,7 +1612,7 @@
  },
  {
   "seed": 5,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.6677766613665679,
   "spread": 0.1014932770259751,
@@ -1623,6 +1839,42 @@
   "seed": 6,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.02247720632122374,
+  "spread": 0.08035505725471492,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 6,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.5329024553190069,
+  "spread": 0.10949880230876663,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 6,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.1004586005843443,
+  "spread": 0.09557167829046775,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 6,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.5201160311866546,
+  "spread": 0.10963201543632661,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 6,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.28318272193561267,
   "spread": 0.1671393010727953,
   "hull_violation": 0.0,
@@ -1630,7 +1882,7 @@
  },
  {
   "seed": 6,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.7169312033290098,
   "spread": 0.1788690909018782,
@@ -1639,7 +1891,7 @@
  },
  {
   "seed": 6,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.10188651702514351,
   "spread": 0.18319796385963305,
@@ -1648,7 +1900,7 @@
  },
  {
   "seed": 6,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.697007546095596,
   "spread": 0.1797355513632768,
@@ -1875,6 +2127,42 @@
   "seed": 7,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.1848188273514545,
+  "spread": 0.07997063736436116,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 7,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.28450938218384403,
+  "spread": 0.09091786554748937,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 7,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.22350130670716495,
+  "spread": 0.08302404094483895,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 7,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.27822236558859426,
+  "spread": 0.09129202144823867,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 7,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.008389171285600905,
   "spread": 0.15533490082441737,
   "hull_violation": 0.0,
@@ -1882,7 +2170,7 @@
  },
  {
   "seed": 7,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.5142384981087016,
   "spread": 0.1585474591098599,
@@ -1891,7 +2179,7 @@
  },
  {
   "seed": 7,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.053650645555905596,
   "spread": 0.1575384938769222,
@@ -1900,7 +2188,7 @@
  },
  {
   "seed": 7,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.4808106384131843,
   "spread": 0.15979862634335373,
@@ -2127,6 +2415,42 @@
   "seed": 8,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.14092740458762693,
+  "spread": 0.07591677358171289,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 8,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.64204869473708,
+  "spread": 0.08009749581459841,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 8,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.11487412688195137,
+  "spread": 0.04972691113169653,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 8,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.6354341836192196,
+  "spread": 0.07965029816811028,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 8,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.04116635336926913,
   "spread": 0.14744866250964433,
   "hull_violation": 0.0,
@@ -2134,7 +2458,7 @@
  },
  {
   "seed": 8,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.38765451648434374,
   "spread": 0.16055447383957278,
@@ -2143,7 +2467,7 @@
  },
  {
   "seed": 8,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.0664997567142116,
   "spread": 0.11222700102815919,
@@ -2152,7 +2476,7 @@
  },
  {
   "seed": 8,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.3602731661118218,
   "spread": 0.16031241962285994,
@@ -2379,6 +2703,42 @@
   "seed": 9,
   "method": "Su-Vaidya",
   "attack": "none",
+  "error": 0.4880453211557631,
+  "spread": 0.049903713444961015,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 9,
+  "method": "Su-Vaidya",
+  "attack": "fixed +50",
+  "error": 0.6245699134266167,
+  "spread": 0.04393746642275276,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 9,
+  "method": "Su-Vaidya",
+  "attack": "random Byzantine",
+  "error": 0.12916810080598018,
+  "spread": 0.06468255570246739,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 9,
+  "method": "Su-Vaidya",
+  "attack": "farthest evader",
+  "error": 0.6145128265718689,
+  "spread": 0.04381107266258466,
+  "hull_violation": 0.0,
+  "consensus_range_excess": 0.0
+ },
+ {
+  "seed": 9,
+  "method": "Trimmed mean",
+  "attack": "none",
   "error": 0.028733145577869545,
   "spread": 0.10282321729245447,
   "hull_violation": 0.0,
@@ -2386,7 +2746,7 @@
  },
  {
   "seed": 9,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "fixed +50",
   "error": 0.398615652491195,
   "spread": 0.09175782887518191,
@@ -2395,7 +2755,7 @@
  },
  {
   "seed": 9,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "random Byzantine",
   "error": 0.03243856933811051,
   "spread": 0.08423046404866052,
@@ -2404,7 +2764,7 @@
  },
  {
   "seed": 9,
-  "method": "Su-Vaidya",
+  "method": "Trimmed mean",
   "attack": "farthest evader",
   "error": 0.37726820209760437,
   "spread": 0.09292874838073462,
