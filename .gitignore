@@ -3,6 +3,3 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 *.log
-
-# paper source (kept locally, not part of the code release)
-l4dc/

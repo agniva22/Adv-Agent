@@ -1,4 +1,4 @@
-"""Comparison methods (Phase 2). Each is an aggregation rule for ``dynamics.simulate``.
+"""Comparison methods of the paper. Each is an aggregation rule for ``dynamics.simulate``.
 
 Q-consensus [7] and DRC-RSSG [10] were proposed for pure consensus; here they
 form the consensus point y_i and the simulator adds the same subgradient step

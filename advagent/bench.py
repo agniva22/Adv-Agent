@@ -1,8 +1,8 @@
-"""Shared benchmark for Phases 5-7: the Phase 3 attacks in the batched simulator.
+"""Shared benchmark: the scripted attacks in the batched simulator.
 
 ``evaluate`` runs one defence against one attack on a list of instances and
-returns per-instance metrics with the same definitions as Phase 3
-(``experiments/phase3_attacks.py``), which ``test_phase4.py`` ties to the NumPy
+returns per-instance metrics with the same definitions as
+``experiments/01_scripted_attacks.py``, which ``tests/test_torchsim.py`` ties to the NumPy
 simulator.
 """
 

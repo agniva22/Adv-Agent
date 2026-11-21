@@ -1,4 +1,4 @@
-"""Batched PyTorch version of ``dynamics.simulate`` for learning (Phases 4-7).
+"""Batched PyTorch version of ``dynamics.simulate`` for learning and evaluation.
 
 B episodes run in lockstep, one graph each (all with the same number of nodes
 n). Neighbour lists are padded to the largest in-degree d: ``nbr[b, i, k]`` is
@@ -9,7 +9,7 @@ respect to a learned defender's weights.
 Conventions match ``dynamics.simulate``: each regular node forms y_i from its
 own value and the received values, then x_i <- y_i - alpha_t * grad f_i(y_i)
 (at x_i for Su-Vaidya). Objectives are capped quadratics (x - a_i)^2.
-``test_phase4.py`` checks every rule here against its NumPy counterpart.
+``tests/test_torchsim.py`` checks every rule here against its NumPy counterpart.
 
 Attacks are functional so that gradient checkpointing can replay them:
 ``state = attack.init(batch)`` and ``values, state = attack(t, x, vals, batch, state)``,
@@ -514,7 +514,7 @@ def run(batch, rule, T, alpha, attack=None, burn=None, ckpt=0):
 
 
 def range_excess(batch, rule, attack=None, T=300):
-    """Pure-consensus safety check of Phases 2-3: with alpha = 0 the regular
+    """Pure-consensus safety check: with alpha = 0 the regular
     states must stay inside the regular nodes' initial range."""
     r = run(batch, rule, T, lambda t: 0.0, attack, burn=0)
     big = torch.finfo(batch.dtype).max

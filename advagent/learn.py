@@ -33,7 +33,7 @@ from .torchsim import S
 # ----------------------------------------------------------------- instances
 
 def instance(seed, F, n=20):
-    """The instance distribution of Phases 2-3: a random (2F+1)-robust graph,
+    """The instance distribution of the paper: a random (2F+1)-robust graph,
     up to 3F F-local adversaries, minimizers and initial states in [-5, 5]."""
     rng = np.random.default_rng(seed)
     adj = g.random_robust(n, 2 * F + 1, rng, extra=1)
@@ -42,7 +42,7 @@ def instance(seed, F, n=20):
 
 
 def eval_instances(F, seeds=10):
-    """Exactly the Phase 3 benchmark instances (``experiments/phase3_attacks.py``)."""
+    """The 10 benchmark graphs per F (``experiments/01_scripted_attacks.py``)."""
     return [instance(1000 * F + s, F) for s in range(seeds)]
 
 
@@ -447,7 +447,7 @@ def train_defender(defender, pools, attacks, T=2000, iters=300, B=24, device="cp
     'stealthy' (fake minimizer drawn from [-50, 50]). Each iteration draws one
     F and one attack for the whole batch.
 
-    ``loss_type``: 'ratio' (Phase 5: mean over episodes of loss / LF loss) or
+    ``loss_type``: 'ratio' (03_shielded_rl.py: mean over episodes of loss / LF loss) or
     'diff' (batch loss minus LF's, divided by LF's batch loss: no per-episode
     division, so episodes where LF is nearly exact cannot dominate) or
     'constrained' ('diff' plus lambda_a * max(0, diff) for the drawn attack a,
@@ -518,3 +518,24 @@ def train_defender(defender, pools, attacks, T=2000, iters=300, B=24, device="cp
         if eval_fn and (it + 1) % eval_every == 0:
             eval_fn(it + 1)
     return defender.cpu(), hist
+
+
+def training_mix(adversarial, attackers):
+    """Attacks the defenders are trained against: no attack, every scripted attack and,
+    if given, the RL attackers {F: policy} (each pushing in both directions)."""
+    if not adversarial:
+        return [(1.0, lambda F: None)]
+    mix = [
+        (1.0, lambda F: None),
+        (0.5, lambda F: ts.Fixed(50.0)), (0.5, lambda F: ts.Fixed(-50.0)),
+        (1.0, lambda F: ts.UniformRandom(-50, 50)),
+        (0.5, lambda F: ts.FarthestEvader(+1, 0.9)), (0.5, lambda F: ts.FarthestEvader(-1, 0.9)),
+        (1.0, lambda F: ts.Band(0.99)), (1.0, lambda F: ts.Band(-0.99)),
+        (1.0, lambda F: ts.StallSwitcher()),
+        (1.0, lambda F: "stealthy"),
+    ]
+    for F, pol in attackers.items():
+        if pol is not None:
+            for direc in (+1, -1):
+                mix.append((1.0, lambda F_, p=pol, dr=direc, Fa=F: LearnedAttack(p, direc=dr) if F_ == Fa else ts.Band(0.99 * dr)))
+    return mix
