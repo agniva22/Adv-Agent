@@ -1,7 +1,5 @@
 # Learning to Aggregate Safely: Shielded Reinforcement Learning for Resilient Distributed Optimization
 
-Code for the L4DC 2027 submission.
-
 Regular agents minimise the average of their local convex functions over a network in which up to $F$ neighbours of each agent are adversarial. Local Filtering (LF) is safe but gives up accuracy. We learn the aggregation weights of LF with reinforcement learning inside a **shield**: the LF filter followed by a floored softmax. Every policy in the shield keeps the consensus and safety guarantees of LF, whatever it has learned. Our defender (*memory + fallback*) adds a per-neighbour trust memory and a fallback to LF. A learned best-response attacker measures each method's worst-case error.
 
 ## Installation
@@ -65,12 +63,3 @@ results/                      one folder per script: table.md, results.json, tra
 tests/                        simulator, baselines, attacks, shield guarantees
 ```
 
-## Citation
-
-```bibtex
-@inproceedings{shielded2027,
-  title     = {Learning to Aggregate Safely: Shielded Reinforcement Learning for Resilient Distributed Optimization},
-  booktitle = {Learning for Dynamics and Control (L4DC)},
-  year      = {2027}
-}
-```
