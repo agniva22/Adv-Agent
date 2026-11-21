@@ -1,23 +1,17 @@
-"""Phase 6: zero-sum training of the shielded defender (proposal Formulation 5C).
+"""Zero-sum training of the memory + fallback defender (Table IV).
 
-Alternating best responses with a growing attacker population (a simple form
-of PSRO [20]):
+Alternating best responses with a growing attacker population:
 
-  round r:  A_r  = PPO best response to the current defender D_r (F = 1 and 2,
+  round r:  A_r  = RL best response to the current defender D_r (F = 1 and 2,
                    warm-started from the previous round's attacker);
-            e_r  = damage A_r does to D_r on the benchmark instances
+            e_r  = error A_r causes on 100 unseen graphs per F
                    (the defender's exploitability);
-            D_r+1 = D_r fine-tuned against the Phase 5 training mix plus every
+            D_r+1 = D_r fine-tuned against the scripted training mix plus every
                    attacker A_0..A_r.
 
-D_0 is the Phase 5 "Shielded RL" defender. Writes results/phase6/{table.md,
-results.json, exploitability.png, defenders/, attackers/}.
-    PYTHONPATH=. python3 experiments/phase6_game.py [--rounds R]
-
-With ``--defender trust`` the game is played with the memory + fallback
-defender (``learn.TrustDefender``, D_0 from ``experiments/defender_trust.py``)
-and exploitability is measured on 100 unseen graphs per F instead of the 10
-benchmark graphs; results go to results/phase6_trust/.
+D_0 is the defender of ``experiments/defender_trust.py``. Writes
+results/phase6_trust/{table.md, results.json, exploitability.png, defenders/, attackers/}.
+    python experiments/phase6_game.py [--rounds R]
 """
 
 import argparse
@@ -38,8 +32,7 @@ from advagent import learn as Lr
 from advagent import torchsim as ts
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "results" / "phase6"
-P5 = ROOT / "results" / "phase5"
+OUT = ROOT / "results" / "phase6_trust"
 P4 = ROOT / "results" / "phase4"
 TRUST = ROOT / "results" / "defender_trust" / "defenders" / "memory___fallback.pt"
 
@@ -52,32 +45,29 @@ def phase5():
     return mod
 
 
-def defender_from(state, kind="shielded"):
-    if kind == "trust":
-        pol = Lr.TrustDefender(c=0.05, name="memory + fallback (game)")
-    else:
-        pol = Lr.ShieldedDefender(shield=True, name="Shielded RL (game)")
+def defender_from(state):
+    pol = Lr.TrustDefender(c=0.05, name="memory + fallback (game)")
     pol.load_state_dict(state)
     return pol.eval()
 
 
 def attacker_job(job):
     """Best response to a fixed defender; returns the policy state and its damage on the benchmark."""
-    F, d_state, a_state, iters, seed, kind = job
+    F, d_state, a_state, iters, seed = job
     torch.set_num_threads(3)
-    defender = defender_from(d_state, kind)
+    defender = defender_from(d_state)
     pol = Lr.AttackerPolicy()
     if a_state is not None:
         pol.load_state_dict(a_state)
     pol, curve = Lr.train_attacker(lambda: defender, Lr.train_pool(F, 512), iters=iters, policy=pol, seed=seed)
-    dmg = damage(defender_from(d_state, kind), pol, F, kind)
+    dmg = damage(defender_from(d_state), pol, F)
     return {"F": F, "state": pol.state_dict(), "curve": curve, **dmg}
 
 
 @torch.no_grad()
-def damage(rule, attacker, F, kind="shielded"):
+def damage(rule, attacker, F):
     """Mean error (attacker picks the worse push direction per instance) and safety."""
-    insts = Lr.train_pool(F, 100, offset=300_000) if kind == "trust" else Lr.eval_instances(F)
+    insts = Lr.train_pool(F, 100, offset=300_000)
     runs = [bench.evaluate(lambda: rule, insts, lambda dr=dr: Lr.LearnedAttack(attacker, direc=dr)) for dr in (1, -1)]
     worst = np.maximum(runs[0]["error"], runs[1]["error"])
     return {"error": float(worst.mean()), "per_instance": worst.tolist(),
@@ -91,12 +81,12 @@ def load_policy(path):
     return pol.eval()
 
 
-def main(rounds, a_iters, d_iters, device, kind="shielded"):
+def main(rounds, a_iters, d_iters, device):
     p5 = phase5()
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "defenders").mkdir(exist_ok=True)
     (OUT / "attackers").mkdir(exist_ok=True)
-    d_state = torch.load(TRUST, map_location="cpu") if kind == "trust" else p5.load_defender("Shielded RL").state_dict()
+    d_state = torch.load(TRUST, map_location="cpu")
     torch.save(d_state, OUT / "defenders" / "D0.pt")
     prev = {F: (torch.load(P4 / "attackers" / f"LF_F{F}_bias_random.pt") if (P4 / "attackers" / f"LF_F{F}_bias_random.pt").exists() else None)
             for F in (1, 2)}
@@ -107,10 +97,10 @@ def main(rounds, a_iters, d_iters, device, kind="shielded"):
             res = []
             for F in (1, 2):
                 pol = load_policy(OUT / "attackers" / f"A{r}_F{F}.pt")
-                res.append({"F": F, "state": pol.state_dict(), "curve": [], **damage(defender_from(d_state, kind), pol, F, kind)})
+                res.append({"F": F, "state": pol.state_dict(), "curve": [], **damage(defender_from(d_state), pol, F)})
         else:
             with get_context("spawn").Pool(2) as pool:
-                res = pool.map(attacker_job, [(F, d_state, prev[F], a_iters, r, kind) for F in (1, 2)])
+                res = pool.map(attacker_job, [(F, d_state, prev[F], a_iters, r) for F in (1, 2)])
         entry = {"round": r}
         for out in res:
             F = out["F"]
@@ -125,7 +115,7 @@ def main(rounds, a_iters, d_iters, device, kind="shielded"):
         if r == rounds:
             break
         # Defender update against the scripted mix plus the whole attacker population.
-        defender = defender_from(d_state, kind)
+        defender = defender_from(d_state)
         mix = p5.training_mix(True, {F: None for F in (1, 2)})
         for F, pols in population.items():
             for pol in pols:
@@ -138,7 +128,7 @@ def main(rounds, a_iters, d_iters, device, kind="shielded"):
             continue
         defender, hist = Lr.train_defender(defender, {F: Lr.train_pool(F, 512) for F in (1, 2)}, mix,
                                            T=2000, iters=d_iters, device=device, lr=1e-3, seed=100 + r,
-                                           loss_type="diff" if kind == "trust" else "ratio")
+                                           loss_type="diff")
         d_state = {k: v.cpu() for k, v in defender.state_dict().items()}
         torch.save(d_state, OUT / "defenders" / f"D{r + 1}.pt")
         log[-1]["defender_loss"] = hist
@@ -147,25 +137,19 @@ def main(rounds, a_iters, d_iters, device, kind="shielded"):
     return log
 
 
-def lf_reference(kind="shielded"):
-    """Damage of the best-response attacker against plain LF (on the same instances as ``damage``)."""
-    if kind == "trust":
-        res = json.loads((ROOT / "results" / "defender_br" / "br.json").read_text())["unseen"]
-        return {F: float(np.mean(res[f"LF|F{F}|RL attacker (best response)"]["error"])) for F in (1, 2)}
-    path = P4 / "results.json"
-    if not path.exists():
-        return {}
-    res = json.loads(path.read_text())
-    return {r["F"]: r["error"] for r in res if r["method"] == "LF" and r["objective"] == "bias" and r["graph"] == "random"}
+def lf_reference():
+    """Error of plain LF under its best-response attacker on the same graphs (Phase 7)."""
+    res = json.loads((ROOT / "results" / "phase7_unseen" / "results.json").read_text())["grid"]
+    return {F: float(np.mean(res[f"LF|F{F}|RL attacker (best response)"]["error"])) for F in (1, 2)}
 
 
-def report(log, kind="shielded"):
-    lf = lf_reference(kind)
+def report(log):
+    lf = lf_reference()
     lines = ["# Phase 6: zero-sum training", "",
              "Exploitability = mean error the round's best-response RL attacker causes on "
-             + ("100 unseen graphs per F" if kind == "trust" else "the Phase 3 benchmark instances")
+             + "100 unseen graphs per F"
              + " (it picks the worse push direction per instance). D_0 is the "
-             + ("memory + fallback defender" if kind == "trust" else "Phase 5 shielded defender")
+             + "memory + fallback defender"
              + "; each later D_r is trained against the scripted mix plus all attackers so far.", "",
              "| Round r | Defender | Exploitability, F = 1 | Exploitability, F = 2 | Max hull violation | Max excess (α = 0) |",
              "|---|---|---|---|---|---|"]
@@ -180,7 +164,7 @@ def report(log, kind="shielded"):
     rr = [e["round"] for e in log]
     for F, c in ((1, "#2a78d6"), (2, "#eb6834")):
         ax.plot(rr, [e[f"F{F}"]["error"] for e in log], "o-", color=c, lw=1.6, ms=6,
-                label=f"{'memory + fallback' if kind == 'trust' else 'shielded RL'} defender, F = {F}")
+                label=f"memory + fallback defender, F = {F}")
         if F in lf:
             ax.axhline(lf[F], color=c, lw=1, ls=":", label=f"plain LF vs its RL attacker, F = {F}")
     ax.set(xlabel="game round r", ylabel="exploitability\n(error under best-response attacker)",
@@ -200,9 +184,6 @@ if __name__ == "__main__":
     ap.add_argument("--d-iters", type=int, default=150)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--report-only", action="store_true")
-    ap.add_argument("--defender", choices=("shielded", "trust"), default="shielded")
     args = ap.parse_args()
-    if args.defender == "trust":
-        OUT = ROOT / "results" / "phase6_trust"
-    log = json.loads((OUT / "results.json").read_text()) if args.report_only else main(args.rounds, args.a_iters, args.d_iters, args.device, args.defender)
-    print(report(log, args.defender))
+    log = json.loads((OUT / "results.json").read_text()) if args.report_only else main(args.rounds, args.a_iters, args.d_iters, args.device)
+    print(report(log))

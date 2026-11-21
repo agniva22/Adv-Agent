@@ -10,5 +10,5 @@ dependencies:
   - pytest
   - pip
   - pip:
-      - torch          # RL attacker / defender (Phases 4-6); default wheel includes CUDA
-      - gymnasium
+      - torch
+      - -e .

@@ -1,4 +1,4 @@
-"""Phase 4: an RL attacker (proposal Formulation 5A) against every defence.
+"""Phase 4: an RL attacker against every defence.
 
 For each defence and F, PPO trains one attacker policy on random training
 graphs (seeds disjoint from the benchmark), then it is evaluated on the exact
@@ -34,8 +34,8 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "phase4"
 T = 2000
 K_OSC = 50   # an oscillation attacker decides every 50 steps
-F1 = ["DGD", "LF", "LF-Metropolis", "Su-Vaidya", "Trimmed mean", "Q-consensus", "Q-consensus (fixed beta)", "DRC-RSSG"]
-F2 = ["LF", "LF-Metropolis", "Su-Vaidya", "Trimmed mean", "DRC-RSSG"]
+F1 = ["DGD", "LF", "LF-Metropolis", "Su-Vaidya", "Trimmed mean", "IOS", "ClippedGossip", "Q-consensus", "Q-consensus (fixed beta)", "DRC-RSSG"]
+F2 = ["LF", "LF-Metropolis", "Su-Vaidya", "Trimmed mean", "IOS", "ClippedGossip", "DRC-RSSG"]
 
 
 def ex72_instance():
@@ -151,7 +151,7 @@ def report(results):
     return "\n".join(lines)
 
 
-COLORS = {"DGD": "#5b5b5b", "LF": "#2a78d6", "LF-Metropolis": "#1baf7a", "Su-Vaidya": "#eda100", "Trimmed mean": "#8a6d00",
+COLORS = {"DGD": "#5b5b5b", "LF": "#2a78d6", "LF-Metropolis": "#1baf7a", "Su-Vaidya": "#eda100", "Trimmed mean": "#8a6d00", "IOS": "#6a3d9a", "ClippedGossip": "#1f9e9e",
           "Q-consensus": "#b3477a", "Q-consensus (fixed beta)": "#e87ba4", "DRC-RSSG": "#eb6834"}
 
 

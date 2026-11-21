@@ -17,7 +17,7 @@ class LFMetropolis:
 
     Every weight is at least 1/(1 + max degree) and they sum to one, so this
     rule stays inside the set where the theorems of [1] hold. It isolates how
-    much of LF's bias comes from its uniform weights (IMPLEMENTATION.md, finding 2).
+    much of LF's bias comes from its uniform weights.
     """
 
     name = "LF-Metropolis"
@@ -80,6 +80,62 @@ class SuVaidya:
         xt = (own + kept.sum()) / (kept.size + 1)
         gp = np.sort(np.append(gvals, g_own))[b: gvals.size + 1 - b]
         return float(np.clip(xt - at * 0.5 * (gp[0] + gp[-1]), *self.X))
+
+
+def _half_steps(i, own, vals, g_own, gvals, at, ctx):
+    """Own and received half-steps x_j - alpha g_j for rules that step before
+    communicating; adversaries' slots carry what they sent."""
+    nb = ctx["nbrs"][i]
+    honest = ctx["regular"][nb]
+    return own - at * g_own, np.where(honest, vals - at * gvals, vals)
+
+
+def _metropolis(i, ctx):
+    deg = ctx["adj"].sum(axis=1)
+    w = 1.0 / (1 + np.maximum(deg[i], deg[ctx["nbrs"][i]]))
+    return w, 1 - w.sum()
+
+
+class IOS:
+    """Iterative outlier scissor (Wu et al., arXiv 2206.04568, Alg. 2) with q_n = F.
+    See ``torchsim.IOS``."""
+
+    name = "IOS"
+    exchanges_gradients = True
+
+    def __init__(self, F):
+        self.F = F
+
+    def update(self, i, own, vals, g_own, gvals, at, ctx):
+        h, hv = _half_steps(i, own, vals, g_own, gvals, at, ctx)
+        w, ws = _metropolis(i, ctx)
+        keep = np.ones(hv.size, dtype=bool)
+        for _ in range(min(self.F, hv.size)):
+            avg = (ws * h + (w[keep] * hv[keep]).sum()) / (ws + w[keep].sum())
+            dist = np.where(keep, np.abs(hv - avg), -1.0)
+            keep[np.argmax(dist)] = False
+        return (ws * h + (w[keep] * hv[keep]).sum()) / (ws + w[keep].sum())
+
+
+class ClippedGossip:
+    """Self-centred clipping (He, Karimireddy and Jaggi, arXiv 2202.01545) with the
+    adaptive radius of their App. D.5. See ``torchsim.ClippedGossip``."""
+
+    name = "ClippedGossip"
+    exchanges_gradients = True
+
+    def __init__(self, F):
+        self.F = F
+
+    def update(self, i, own, vals, g_own, gvals, at, ctx):
+        h, hv = _half_steps(i, own, vals, g_own, gvals, at, ctx)
+        w, _ = _metropolis(i, ctx)
+        diff = hv - h
+        delta = np.sort(w)[::-1][: self.F].sum()
+        order = np.argsort(np.abs(diff), kind="stable")
+        inS = np.cumsum(w[order]) <= 1 - delta + 1e-12
+        tau = np.sqrt((w[order][inS] * diff[order][inS] ** 2).sum())
+        return h + (w * np.clip(diff, -tau, tau)).sum()
 
 
 class QConsensus:

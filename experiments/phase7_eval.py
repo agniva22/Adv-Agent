@@ -1,22 +1,16 @@
-"""Phase 7: final evaluation of every method against every attack.
+"""Final evaluation of every method against every attack (Tables I and II).
 
-Methods: the seven Phase 2 methods, the Phase 5 learned defenders (shielded,
-shielded without adversarial training, unshielded ablation) and the Phase 6
-game-trained shielded defender. Attacks: the eight scripted attacks of Phase 3
+Methods: the baselines, the learned defenders of Phase 5 (shielded without
+memory, unshielded ablation) and, with ``--unseen``, the memory + fallback
+defender and its game-trained version. Attacks: the scripted attacks of Phase 3
 plus, for each method, an RL attacker trained against that method itself
 (Phase 4 for the baselines; trained here for the learned defenders).
 
-Reported per method: error with no attack, mean and worst case over attacks,
-safety, and the error on the U-W graph against the |T|/n bound of [1, Prop. 8.1].
-Writes results/phase7/{table.md, results.json, heatmap.png, robustness.png}.
-    PYTHONPATH=. python3 experiments/phase7_eval.py
+    python experiments/phase7_eval.py            # 10 benchmark graphs -> results/phase7/
+    python experiments/phase7_eval.py --unseen   # 100 unseen graphs   -> results/phase7_unseen/ (paper)
 
-``--unseen`` evaluates on 100 unseen graphs per F (the 10 benchmark graphs are
-too few to rank the learned defenders) and adds the memory + fallback defenders
-(``defender_trust``, its Phase 6 game version, and the switching variant named
-by ``--switch-variant``); results go to results/phase7_unseen/. Best-response
-attackers already trained for the benchmark run are reused; missing ones are
-trained.
+Best-response attackers already trained for the benchmark run are reused;
+missing ones are trained.
 """
 
 import argparse
@@ -41,10 +35,10 @@ ROOT = Path(__file__).resolve().parents[1]
 UNSEEN = os.environ.get("ADV_P7_UNSEEN") == "1"   # set by --unseen; read again in worker processes
 OUT = ROOT / "results" / ("phase7_unseen" if UNSEEN else "phase7")
 P7 = ROOT / "results" / "phase7"
-P4, P5, P6 = (ROOT / "results" / p for p in ("phase4", "phase5", "phase6"))
-BASE = ["DGD", "LF", "LF-Metropolis", "Su-Vaidya", "Trimmed mean", "Q-consensus", "Q-consensus (fixed beta)", "DRC-RSSG"]
-LEARNED = ["Shielded RL", "Shielded RL (game)", "Shielded RL (no adv. training)", "Unshielded RL"]
-TRUST = ["memory + fallback", "memory + fallback (game)", "memory + fallback (switching)"]
+P4 = ROOT / "results" / "phase4"
+BASE = ["DGD", "LF", "LF-Metropolis", "Su-Vaidya", "Trimmed mean", "IOS", "ClippedGossip", "Q-consensus", "Q-consensus (fixed beta)", "DRC-RSSG"]
+LEARNED = ["Shielded RL", "Unshielded RL"]
+TRUST = ["memory + fallback", "memory + fallback (game)"]
 if UNSEEN:
     LEARNED = LEARNED + TRUST
 
@@ -75,14 +69,6 @@ def learned(name):
     if name == "memory + fallback (game)":
         pol = Lr.TrustDefender(c=0.05, name=name)
         pol.load_state_dict(torch.load(ROOT / "results" / "phase6_trust" / "defenders" / "final.pt", map_location="cpu"))
-        return pol.eval()
-    if name == "memory + fallback (switching)":
-        pol = experiment("defender_switching").load(os.environ["ADV_SWITCH_VARIANT"])
-        pol.name = name
-        return pol
-    if name == "Shielded RL (game)":
-        pol = Lr.ShieldedDefender(shield=True, name=name)
-        pol.load_state_dict(torch.load(P6 / "defenders" / "final.pt", map_location="cpu"))
         return pol.eval()
     return phase5().load_defender(name)
 
@@ -124,6 +110,11 @@ def br_path(name, F):
 
 def br_attacker(name, F):
     path = br_path(name, F)
+    grad = path.with_name(path.stem + "_grad.pt")
+    if grad.exists():   # Su-Vaidya: the attacker that also learns its fake gradients
+        pol = Lr.GradientAttacker()
+        pol.load_state_dict(torch.load(grad, map_location="cpu"))
+        return pol.eval()
     if not path.exists():
         return None
     pol = Lr.AttackerPolicy()
@@ -257,12 +248,11 @@ if __name__ == "__main__":
     ap.add_argument("--br-iters", type=int, default=200)
     ap.add_argument("--skip-br", action="store_true")
     ap.add_argument("--unseen", action="store_true")
-    ap.add_argument("--switch-variant", default="two-timescale + switching-heavy")
     args = ap.parse_args()
     if args.unseen and not UNSEEN:   # re-run with the environment set, so worker processes see it too
         import subprocess
         import sys
-        env = dict(os.environ, ADV_P7_UNSEEN="1", ADV_SWITCH_VARIANT=args.switch_variant)
+        env = dict(os.environ, ADV_P7_UNSEEN="1")
         sys.exit(subprocess.call([sys.executable] + sys.argv, env=env))
     OUT.mkdir(parents=True, exist_ok=True)
     methods = BASE + LEARNED

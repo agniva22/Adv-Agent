@@ -1,18 +1,18 @@
-"""Learned attacker (Formulation 5A) and shielded defender (Formulation 5B).
+"""Learned attacker and shielded defender (Sections 3 and 4 of the paper).
 
 Attacker: one policy, shared by every (adversaries -> regular receiver) pair,
 picks a band action a (see ``torchsim.band``) per receiver every ``k`` steps.
 It sees the receiver's local view, its own previous action (a one-step memory,
 enough to implement switching) and the omniscient global quantities of [1]'s
 threat model (x*, the regular mean). It is trained with PPO for one of two
-objectives (proposal Sec. 5A): ``bias`` pushes the regular mean in a direction
+objectives: ``bias`` pushes the regular mean in a direction
 ``dir`` drawn per episode; ``oscillation`` maximises its total variation over
 the second half of the run.
 
 Defender: one policy, shared by every regular node, scores the node itself
 and each value LF retains. Scores become weights through the floored softmax
-of the proposal (Sec. 5B), so every weight is at least c / (d_i + 1) and the
-weights sum to one; ``docs/shield_theorem.md`` shows that this keeps the
+so every weight is at least c / (d_i + 1) and the
+weights sum to one; Theorem 1 of the paper shows that this keeps the
 guarantees of [1]. The simulator is differentiable in those weights, so the
 defender is trained by backpropagation through the whole run.
 """
@@ -64,10 +64,11 @@ def mlp(i, h, o, depth=2):
 
 class AttackerPolicy(nn.Module):
     n_local, n_global = 14, 5
+    n_act = 1   # per-receiver action: the band position of the value sent
 
     def __init__(self, hidden=64, amax=4.0):
         super().__init__()
-        self.mu = mlp(self.n_local, hidden, 1)
+        self.mu = mlp(self.n_local, hidden, self.n_act)
         self.log_std = nn.Parameter(torch.tensor(-0.5))
         self.critic = mlp(self.n_global + self.n_local, hidden, 1)
         self.amax = amax
@@ -104,46 +105,59 @@ class AttackerPolicy(nn.Module):
         return self.critic(torch.cat([glob, pooled], -1))[..., 0]
 
     def dist(self, loc):
-        return torch.distributions.Normal(self.mu(loc)[..., 0], self.log_std.exp())
+        if self.n_act == 1:
+            return torch.distributions.Normal(self.mu(loc)[..., 0], self.log_std.exp())
+        return torch.distributions.Independent(torch.distributions.Normal(self.mu(loc), self.log_std.exp()), 1)
+
+    def value_action(self, a):
+        return a if self.n_act == 1 else a[..., 0]
+
+    def lie(self, a, direc):
+        """Fake-gradient rule for ``torchsim.descend`` (None: the default lie)."""
+        return None
 
 
-class MemoryAwareAttacker(AttackerPolicy):
-    """Attacker that also sees, for every receiver, what that receiver's
-    ``TrustDefender`` memory says about the adversary slots (mean over them of
-    the three memory channels; the side channel relative to ``dir``). The
-    defender being attacked is set with ``watch``; against a rule without a
-    memory the extra features are zero."""
+class GradientAttacker(AttackerPolicy):
+    """Attacker for rules that exchange gradients (Su-Vaidya [5]): a second
+    per-receiver action c places the fake gradient in the receiver's honest
+    gradient pool [g_min, g_max] (own and regular in-neighbours):
+    g = mid + (c - dir) * (g_max - g_min) / 2, clipped to [-L, L]. c = 0 sends
+    g_min when pushing up (dir = +1) and g_max when pushing down, which is the
+    default lie of ``torchsim.gradient_lie``; |c - dir| > 1 lies outside the pool
+    (and is then usually trimmed)."""
 
-    n_local = AttackerPolicy.n_local + 3
-
-    def watch(self, rule):
-        object.__setattr__(self, "rule", rule)   # a reference, not a submodule
-        return self
+    n_local, n_act = AttackerPolicy.n_local + 2, 2
 
     def features(self, t, T, at, x, vals, batch, direc, prev_mean, a_prev):
-        loc, glob = super().features(t, T, at, x, vals, batch, direc, prev_mean, a_prev)
-        mem = getattr(getattr(self, "rule", None), "mem", {}).get(t - 1)
-        if mem is not None:
-            mem = mem[..., :3]   # the shortest-memory channels
-        if mem is None:
-            extra = torch.zeros(*x.shape, 3, device=x.device, dtype=x.dtype)
-        else:
-            w = batch.from_adv[..., None].to(x.dtype)
-            extra = (mem * w).sum(-2) / w.sum(-2).clamp(min=1)
-            extra = torch.cat([extra[..., :2], extra[..., 2:] * direc[:, None, None]], -1)
+        loc, glob = super().features(t, T, at, x, vals, batch, direc, prev_mean, a_prev[..., 0])
+        gmin, gmax = self._pool(x, batch.grad(x), batch.gather(batch.grad(x)), batch)
+        extra = torch.stack([(gmax - gmin) / (2 * S), direc[:, None] * a_prev[..., 1] / self.amax], -1)
         return torch.cat([loc, extra], -1), glob
+
+    @staticmethod
+    def _pool(x, g, gvals, batch):
+        regslot = batch.nmask & ~batch.from_adv
+        inf = torch.tensor(float("inf"), device=x.device, dtype=x.dtype)
+        return (torch.minimum(torch.where(regslot, gvals, inf).amin(-1), g),
+                torch.maximum(torch.where(regslot, gvals, -inf).amax(-1), g))
+
+    def lie(self, a, direc):
+        def fake(x, g, vals, gvals, batch):
+            gmin, gmax = self._pool(x, g, gvals, batch)
+            c = a[..., 1] - direc[:, None]
+            v = 0.5 * (gmin + gmax) + c * 0.5 * (gmax - gmin)
+            return v.clamp(-batch.L, batch.L)[..., None].expand_as(gvals)
+        return fake
 
     @classmethod
     def from_policy(cls, pol):
-        """Same behaviour as ``pol`` (zero weights on the memory features)."""
+        """Same behaviour as an ``AttackerPolicy`` ``pol`` with the default lie
+        (new inputs and the gradient action's weights start at zero)."""
         new = cls()
         state = new.state_dict()
         for k, v in pol.state_dict().items():
-            if state[k].shape == v.shape:
-                state[k] = v.clone()
-            else:
-                state[k] = torch.zeros_like(state[k])
-                state[k][:, : v.shape[1]] = v
+            state[k] = torch.zeros_like(state[k])
+            state[k][tuple(slice(0, n) for n in v.shape)] = v
         new.load_state_dict(state)
         return new
 
@@ -158,7 +172,8 @@ class LearnedAttack(ts.Attack):
 
     def init(self, batch):
         self.policy.to(batch.device)
-        return (torch.zeros(batch.B, batch.n, device=batch.device, dtype=batch.dtype), batch.mean(batch.x0))
+        shape = (batch.B, batch.n) if self.policy.n_act == 1 else (batch.B, batch.n, self.policy.n_act)
+        return (torch.zeros(*shape, device=batch.device, dtype=batch.dtype), batch.mean(batch.x0))
 
     def __call__(self, t, x, vals, batch, state):
         a, prev = state
@@ -169,7 +184,10 @@ class LearnedAttack(ts.Attack):
                 dist = self.policy.dist(loc)
                 a = (dist.sample() if self.sample else dist.mean).clamp(-self.policy.amax, self.policy.amax)
             prev = batch.mean(x)
-        v, _ = ts.band(a, x, vals, batch)
+        if self.policy.n_act > 1:   # read by ``grads`` in the same step (evaluation only)
+            direc = torch.full((batch.B,), float(self.direc), device=batch.device, dtype=batch.dtype)
+            self.grads = self.policy.lie(a, direc)
+        v, _ = ts.band(self.policy.value_action(a), x, vals, batch)
         return v[..., None].expand_as(vals), (a, prev)
 
 
@@ -187,7 +205,7 @@ def attacker_rollout(policy, batch, rule, T, alpha, k, direc, objective="bias"):
     act = policy.acting(batch)
     prev = batch.mean(x)
     buf = {"loc": [], "glob": [], "a": [], "logp": [], "v": [], "r": []}
-    a = torch.zeros_like(x)
+    a = torch.zeros_like(x) if policy.n_act == 1 else torch.zeros(*x.shape, policy.n_act, device=x.device, dtype=x.dtype)
     osc = torch.zeros_like(direc)
     for t in range(T):
         vals = batch.gather(x)
@@ -199,10 +217,10 @@ def attacker_rollout(policy, batch, rule, T, alpha, k, direc, objective="bias"):
             buf["logp"].append((dist.log_prob(a) * act).sum(1))
             buf["v"].append(policy.value(loc, glob, act))
             prev, m_start = batch.mean(x), batch.mean(x)
-        av, _ = ts.band(a, x, vals, batch)
+        av, _ = ts.band(policy.value_action(a), x, vals, batch)
         vals = torch.where(batch.from_adv, av[..., None], vals)
         m_old = batch.mean(x)
-        x = torch.where(batch.reg, ts.descend(rule, x, vals, batch, t, alpha(t)), x)
+        x = torch.where(batch.reg, ts.descend(rule, x, vals, batch, t, alpha(t), lie=policy.lie(a, direc)), x)
         if t >= T // 2:
             osc = osc + (batch.mean(x) - m_old).abs()
         if (t + 1) % k == 0 or t + 1 == T:
@@ -357,10 +375,11 @@ class TrustDefender(ShieldedDefender):
     """
 
     n_feat = ShieldedDefender.n_feat + 3
+    n_extra = 0   # per-slot features added by subclasses
 
     def __init__(self, hidden=32, c=0.05, betas=(0.95,), name="Trust RL"):
         self.betas = tuple(betas)
-        self.n_feat = ShieldedDefender.n_feat + 3 * len(self.betas)
+        self.n_feat = ShieldedDefender.n_feat + 3 * len(self.betas) + self.n_extra
         super().__init__(hidden, c, shield=True, name=name)
         self.gate = mlp(hidden, hidden, 1, depth=1)
         self.mem = {}
@@ -368,12 +387,17 @@ class TrustDefender(ShieldedDefender):
     def reset(self, batch):
         self.mem = {}
 
+    @staticmethod
+    def current(x, vals, batch, keep):
+        """This step's per-slot signals (B, n, d, 3): deviation, trimmed by LF, side."""
+        diff = torch.where(batch.nmask, vals - x[..., None], 0)
+        typical = diff.abs().sum(-1, keepdim=True) / batch.deg[..., None].clamp(min=1) + 1e-6
+        return torch.stack([torch.tanh(diff.abs() / typical / 2), (batch.nmask & ~keep).to(x.dtype),
+                            torch.sign(diff)], -1)
+
     def memory(self, x, vals, batch, t, keep):
         with torch.no_grad():
-            diff = torch.where(batch.nmask, vals - x[..., None], 0)
-            typical = diff.abs().sum(-1, keepdim=True) / batch.deg[..., None].clamp(min=1) + 1e-6
-            cur = torch.stack([torch.tanh(diff.abs() / typical / 2), (batch.nmask & ~keep).to(x.dtype),
-                               torch.sign(diff)], -1)
+            cur = self.current(x, vals, batch, keep)
             prev = self.mem.get(t - 1)
             m = torch.cat([cur * (1 - b) if prev is None else b * prev[..., 3 * j: 3 * j + 3] + (1 - b) * cur
                            for j, b in enumerate(self.betas)], -1)

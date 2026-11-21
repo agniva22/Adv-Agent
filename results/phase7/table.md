@@ -11,6 +11,8 @@ Phase 3 benchmark instances (10 random 20-node graphs per F, T = 2000). 'RL atta
 | LF-Metropolis | 0.123 | 0.361 | 0.529 (RL attacker (best response)) | 0.529 | yes |
 | Su-Vaidya | 0.237 | 0.377 | 0.645 (RL attacker (best response)) | 0.645 | yes |
 | Trimmed mean | 0.141 | 0.275 | 0.517 (RL attacker (best response)) | 0.517 | yes |
+| IOS | 0.351 | 0.370 | 0.864 (RL attacker (best response)) | 0.864 | yes |
+| ClippedGossip | 0.109 | 3.518 | 24.385 (fixed +50) | 0.617 | **no**: unsafe under fixed +50, random Byzantine |
 | Q-consensus | 0.123 | 1.670 | 10.555 (RL attacker (best response)) | 10.555 | **no**: unsafe under fixed +50, random Byzantine, stealthy (fake 5), RL attacker (best response) |
 | Q-consensus (fixed beta) | 0.138 | 0.572 | 1.819 (stealthy (fake 50)) | 1.361 | **no**: unsafe under fixed +50, random Byzantine, RL attacker (best response) |
 | DRC-RSSG | 0.202 | 0.300 | 0.666 (RL attacker (best response)) | 0.666 | **no**: unsafe under farthest evader |
@@ -26,8 +28,10 @@ Phase 3 benchmark instances (10 random 20-node graphs per F, T = 2000). 'RL atta
 | DGD | 0.000 | 7.795 | 44.701 (fixed +50) | — | **no**: unsafe under fixed +50, random Byzantine, stealthy (fake 50) |
 | LF | 0.291 | 0.611 | 0.898 (RL attacker (best response)) | 0.898 | yes |
 | LF-Metropolis | 0.242 | 0.653 | 0.897 (RL attacker (best response)) | 0.897 | yes |
-| Su-Vaidya | 0.250 | 0.544 | 0.876 (RL attacker (best response)) | 0.876 | yes |
+| Su-Vaidya | 0.250 | 0.544 | 0.878 (RL attacker (best response)) | 0.878 | yes |
 | Trimmed mean | 0.288 | 0.598 | 0.852 (RL attacker (best response)) | 0.852 | yes |
+| IOS | 0.698 | 0.686 | 1.561 (RL attacker (best response)) | 1.561 | **no**: unsafe under farthest evader, RL attacker (best response) |
+| ClippedGossip | 0.173 | 5.106 | 34.751 (fixed +50) | 1.002 | **no**: unsafe under fixed +50, random Byzantine |
 | Q-consensus | 0.162 | 0.517 | 1.509 (fixed +50) | — | **no**: unsafe under fixed +50, random Byzantine, stealthy (fake 5), stealthy (fake 50) |
 | Q-consensus (fixed beta) | 0.106 | 0.637 | 2.274 (stealthy (fake 50)) | — | **no**: unsafe under fixed +50, random Byzantine, stealthy (fake 50) |
 | DRC-RSSG | 0.402 | 0.568 | 1.144 (RL attacker (best response)) | 1.144 | **no**: unsafe under farthest evader |
@@ -45,6 +49,8 @@ Phase 3 benchmark instances (10 random 20-node graphs per F, T = 2000). 'RL atta
 | LF-Metropolis | 0.123 | 0.397 | 0.100 | 0.370 | 0.289 | 0.397 | 0.384 | 0.421 | 0.529 |
 | Su-Vaidya | 0.237 | 0.391 | 0.225 | 0.387 | 0.357 | 0.384 | 0.372 | 0.251 | 0.645 |
 | Trimmed mean | 0.141 | 0.269 | 0.149 | 0.251 | 0.241 | 0.269 | 0.266 | 0.242 | 0.517 |
+| IOS | 0.351 | 0.137 | 0.132 | 0.561 | 0.363 | 0.137 | 0.336 | 0.430 | 0.864 |
+| ClippedGossip | 0.109 | 24.385 ⚠ | 0.484 ⚠ | 0.352 | 0.364 | 1.541 | 0.236 | 0.166 | 0.617 |
 | Q-consensus | 0.123 ∅ | 1.281 ⚠ | 0.190 ⚠ | 0.205 ∅ | 0.204 ⚠ | 0.145 ∅ | 0.221 ∅ | 0.557 ∅ | 10.555 ⚠ |
 | Q-consensus (fixed beta) | 0.138 | 0.134 ⚠ | 0.161 ⚠ | 0.337 | 0.255 | 1.819 | 0.225 | 0.282 | 1.361 ⚠ |
 | DRC-RSSG | 0.202 | 0.140 | 0.149 | 0.491 ⚠ | 0.280 | 0.140 | 0.310 | 0.225 | 0.666 |
@@ -60,8 +66,10 @@ Phase 3 benchmark instances (10 random 20-node graphs per F, T = 2000). 'RL atta
 | DGD | 0.000 | 44.701 ⚠ | 0.915 ⚠ | 1.000 | 0.655 | 6.632 ⚠ | 0.398 | 0.266 | — |
 | LF | 0.291 | 0.692 | 0.216 | 0.679 | 0.658 | 0.692 | 0.666 | 0.390 | 0.898 |
 | LF-Metropolis | 0.242 | 0.794 | 0.161 | 0.777 | 0.656 | 0.794 | 0.682 | 0.459 | 0.897 |
-| Su-Vaidya | 0.250 | 0.676 | 0.131 | 0.669 | 0.530 | 0.533 | 0.540 | 0.398 | 0.876 |
+| Su-Vaidya | 0.250 | 0.676 | 0.131 | 0.669 | 0.530 | 0.533 | 0.540 | 0.398 | 0.878 |
 | Trimmed mean | 0.288 | 0.685 | 0.214 | 0.667 | 0.651 | 0.685 | 0.618 | 0.412 | 0.852 |
+| IOS | 0.698 | 0.234 | 0.205 | 1.248 ⚠ | 0.613 | 0.234 | 0.714 | 0.676 | 1.561 ⚠ |
+| ClippedGossip | 0.173 | 34.751 ⚠ | 0.599 ⚠ | 0.757 ∅ | 0.679 | 2.431 | 0.380 | 0.247 | 1.002 |
 | Q-consensus | 0.162 ∅ | 1.509 ⚠ | 0.286 ⚠ | 0.152 ∅ | 0.292 ⚠ | 0.185 ⚠ | 0.265 ∅ | 0.929 ∅ | — |
 | Q-consensus (fixed beta) | 0.106 | 0.102 ⚠ | 0.177 ⚠ | 0.797 | 0.565 | 2.274 ⚠ | 0.365 | 0.181 | — |
 | DRC-RSSG | 0.402 | 0.200 | 0.207 | 0.974 ⚠ | 0.679 | 0.207 | 0.701 | 0.432 | 1.144 |
@@ -79,6 +87,8 @@ Phase 3 benchmark instances (10 random 20-node graphs per F, T = 2000). 'RL atta
 | LF-Metropolis | 0.976 | 0.947 |
 | Su-Vaidya | 1.000 | 1.000 |
 | Trimmed mean | 0.993 | 0.993 |
+| IOS | 0.986 | 0.957 |
+| ClippedGossip | 0.983 | 0.333 |
 | Q-consensus | 0.788 | 0.910 |
 | Q-consensus (fixed beta) | 0.371 | 0.696 |
 | DRC-RSSG | 0.993 | 0.993 |

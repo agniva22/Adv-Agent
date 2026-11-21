@@ -1,14 +1,10 @@
-"""Literature-guided defender variants, compared on the benchmark and on 100 unseen graphs per F.
+"""Train the memory + fallback defender (Section 3 of the paper).
 
-  memory + fallback   per-neighbour trust memory and an LF fallback gate
-                      (trust-based consensus, Yemini et al.; learning-augmented fallback);
-  constrained         'no worse than LF on any attack' as a dual-ascent penalty (SURF-style constraints);
-  all three           both of the above.
-
-The 10 benchmark graphs turned out too few to rank defenders (the switching attack
-alone swings by 50%), so every method is also run on 100 unseen graphs per F.
+The defender keeps a per-neighbour trust memory and an LF fallback gate inside
+the shield. It is trained by backpropagation through the simulator and compared
+with LF and Su-Vaidya on the benchmark and on 100 unseen graphs per F.
 Writes results/defender_trust/{trust.md, trust.json, training.json, training.png, defenders/*.pt}.
-    PYTHONPATH=. python experiments/defender_trust.py [--iters N] [--eval-only]
+    python experiments/defender_trust.py [--iters N] [--eval-only]
 """
 
 import argparse
@@ -32,8 +28,6 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "defender_trust"
 VARIANTS = {
     "memory + fallback": dict(trust=True, loss_type="diff"),
-    "constrained": dict(trust=False, loss_type="constrained"),
-    "memory + fallback + constrained": dict(trust=True, loss_type="constrained"),
 }
 UNSEEN = 100
 
@@ -125,7 +119,7 @@ def training_plot(train):
         ax.plot(y, color=c, lw=1.4, label=r["name"])
     ax.axhline(0, color="#888", lw=0.8, ls=":")
     ax.set(xlabel="training iteration", ylabel="(loss − LF loss) / LF loss\n(20-iteration moving average)",
-           title="Literature-guided defenders: training (below 0 = better than LF)")
+           title="memory + fallback: training (below 0 = better than LF)")
     ax.legend(fontsize=7, frameon=False)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
@@ -144,13 +138,12 @@ if __name__ == "__main__":
         with get_context("spawn").Pool(len(VARIANTS)) as pool:
             train = pool.map(train_job, [(n, args.iters, args.device) for n in VARIANTS], chunksize=1)
         (OUT / "training.json").write_text(json.dumps(train))
-    training_plot(json.loads((OUT / "training.json").read_text()))
-    fixes = module("defender_fixes")
-    methods = {"LF": lambda: ts.LF(), "Su-Vaidya": lambda: ts.BASELINES["Su-Vaidya"](),
-               "fix 1+4 (earlier)": lambda: fixes.load("fix 1+4: diff loss, c = 0.05").to(args.device)}
+    if (OUT / "training.json").exists():
+        training_plot(json.loads((OUT / "training.json").read_text()))
+    methods = {"LF": lambda: ts.LF(), "Su-Vaidya": lambda: ts.BASELINES["Su-Vaidya"]()}
     methods.update({n: (lambda n=n: load(n).to(args.device)) for n in VARIANTS})
     names = list(methods)
-    out, md = {}, ["# Literature-guided defenders", ""]
+    out, md = {}, ["# memory + fallback defender", ""]
     for key, insts_for, title in (("unseen", lambda F: Lr.train_pool(F, UNSEEN, offset=300_000), f"{UNSEEN} unseen graphs"),
                                   ("benchmark", Lr.eval_instances, "Phase 3 benchmark (10 graphs)")):
         res = eval_on(methods, insts_for, args.device)

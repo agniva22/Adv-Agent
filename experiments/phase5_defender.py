@@ -1,9 +1,9 @@
-"""Phase 5: the shielded RL defender (proposal Formulation 5B) and its ablations.
+"""Phase 5: the shielded RL defender and its ablations.
 
 Three defenders are trained by backpropagation through the simulator on random
 training graphs with F = 1 and F = 2 mixed:
 
-  * Shielded RL: LF filter + floored softmax (docs/shield_theorem.md), trained
+  * Shielded RL: LF filter + floored softmax, trained
     against a mix of every scripted attack, no attack, and the Phase 4 RL
     attackers that were trained against LF;
   * Shielded RL (no adv. training): same shield, trained with no adversaries;

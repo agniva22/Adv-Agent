@@ -19,6 +19,10 @@ PPO, 300 iterations per attacker; evaluated on the Phase 3 benchmark instances (
 | Trimmed mean | 2 | 0.288 | 0.685 (fixed +50) | 0.711 | **0.852** | 1.24× | 0.000 | 0.000 |
 | Su-Vaidya | 1 | 0.237 | 0.391 (fixed +50) | 0.531 | **0.645** | 1.65× | 0.000 | 0.000 |
 | Su-Vaidya | 2 | 0.250 | 0.676 (fixed +50) | 0.700 | **0.876** | 1.30× | 0.000 | 0.000 |
+| IOS | 1 | 0.351 | 0.561 (farthest evader) | 0.660 | **0.864** | 1.54× | 0.000 | 0.000 |
+| ClippedGossip | 1 | 0.107 | 25.404 (fixed +50) | 25.404 | **0.617** | 0.02× | 0.000 | 0.000 |
+| IOS | 2 | 0.698 | 1.248 (farthest evader) | 1.359 | **1.561** | 1.25× | 3.750 | 3.731 |
+| ClippedGossip | 2 | 0.173 | 34.751 (fixed +50) | 34.751 | **1.002** | 0.03× | 0.000 | 0.000 |
 
 ## Oscillation attacker: total variation of x̄ over t ≥ T/2
 

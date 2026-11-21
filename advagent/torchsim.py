@@ -64,12 +64,14 @@ class Batch:
         self.from_adv = self.nmask & self.gather(self.adv)
         self.n_adv_in = self.from_adv.sum(-1)
         self.a = T(np.stack([I["a"] for I in instances]))
+        # Optional curvature s_i: f_i = s_i (x - a_i)^2 (default 1, the plain quadratics).
+        self.s = T(np.stack([np.asarray(I.get("s", np.ones(n)), dtype=float) for I in instances]))
         self.x0 = T(np.stack([I["x0"] for I in instances]))
         self.deg = T(deg)
         self.nbr_deg = self.gather(self.deg)
         evf = self.ev.to(dtype)
-        # x* of the average of capped quadratics: the plain mean while no cap is active.
-        self.x_star = (self.a * evf).sum(1) / evf.sum(1)
+        # x* of the average of capped quadratics: the s-weighted mean while no cap is active.
+        self.x_star = (self.s * self.a * evf).sum(1) / (self.s * evf).sum(1)
         big = torch.finfo(dtype).max
         self.hull_lo = torch.where(self.ev, self.a, big).min(1).values
         self.hull_hi = torch.where(self.ev, -self.a, big).min(1).values.neg()
@@ -85,7 +87,7 @@ class Batch:
         return (x * evf).sum(1) / evf.sum(1)
 
     def grad(self, x):
-        return (2 * (x - self.a)).clamp(-self.L, self.L)
+        return (2 * self.s * (x - self.a)).clamp(-self.L, self.L)
 
 
 # --------------------------------------------------------------------- rules
@@ -183,6 +185,68 @@ class SuVaidya(Rule):
         return torch.where(batch.deg >= 2 * F[..., 0] + 1, xn, x)
 
 
+def half_steps(x, vals, g, gvals, batch, at):
+    """Own and received half-step models x_j - alpha g_j(x_j) for rules that run the
+    local step before communicating (ClippedGossip, IOS). Adversary slots carry
+    whatever the adversary sent."""
+    return x - at * g, torch.where(batch.from_adv, vals, vals - at * gvals)
+
+
+def metropolis(batch):
+    """Metropolis-Hastings weights on the in-neighbour slots and the self-weight."""
+    w = batch.nmask / (1 + torch.maximum(batch.deg[..., None], batch.nbr_deg))
+    return w, 1 - w.sum(-1)
+
+
+class IOS(Rule):
+    """Iterative outlier scissor of Wu et al. [arXiv 2206.04568, Alg. 2], q_n = F:
+    F times, drop the neighbour farthest from the weighted average of the trusted
+    set (the node itself is never dropped); output the weighted average of the
+    rest. Metropolis weights; gradient step first, then aggregation of half-steps."""
+
+    name = "IOS"
+    exchanges_gradients = True
+
+    def update(self, x, vals, g, gvals, batch, t, at):
+        h, hv = half_steps(x, vals, g, gvals, batch, at)
+        w, ws = metropolis(batch)
+        keep = batch.nmask.clone()
+        for i in range(int(batch.F.max())):
+            kw = torch.where(keep, w, 0)
+            avg = (ws * h + (kw * hv).sum(-1)) / (ws + kw.sum(-1))
+            dist = torch.where(keep, (hv - avg[..., None]).abs(), -1.0)
+            drop = torch.zeros_like(keep).scatter_(-1, dist.argmax(-1, keepdim=True), True)
+            keep = keep & ~(drop & (i < batch.F) & (dist >= 0))
+        kw = torch.where(keep, w, 0)
+        return (ws * h + (kw * hv).sum(-1)) / (ws + kw.sum(-1))
+
+
+class ClippedGossip(Rule):
+    """Self-centred clipping of He, Karimireddy and Jaggi [arXiv 2202.01545]:
+    x_i <- h_i + sum_j W_ij clip(h_j - h_i, tau_i) on the half-steps h, with
+    Metropolis weights and the adaptive radius of their App. D.5:
+    tau_i^2 = sum over the closest neighbours S of W_ij |h_i - h_j|^2, where S is
+    as large as possible with sum_S W_ij <= 1 - delta_i. delta_i (the Byzantine
+    weight) is bounded by the sum of node i's F largest neighbour weights, which
+    i can compute. Deterministic gradients, so no momentum."""
+
+    name = "ClippedGossip"
+    exchanges_gradients = True
+
+    def update(self, x, vals, g, gvals, batch, t, at):
+        h, hv = half_steps(x, vals, g, gvals, batch, at)
+        w, _ = metropolis(batch)
+        diff = torch.where(batch.nmask, hv - h[..., None], 0)
+        idx = (batch.F - 1).expand(-1, batch.n, 1)
+        delta = torch.where(batch.nmask, w, 0).sort(-1, descending=True).values.cumsum(-1).gather(-1, idx)
+        inf = torch.tensor(float("inf"), device=x.device, dtype=x.dtype)
+        order = torch.where(batch.nmask, diff.abs(), inf).sort(dim=-1, stable=True).indices
+        ws, ds = w.gather(-1, order), diff.gather(-1, order)
+        inS = batch.nmask.gather(-1, order) & (ws.cumsum(-1) <= 1 - delta + 1e-12)
+        tau = torch.where(inS, ws * ds ** 2, 0).sum(-1).sqrt()
+        return h + (w * diff.clamp(-tau[..., None], tau[..., None])).sum(-1)
+
+
 class QConsensus(Rule):
     """Batched ``baselines.QConsensus``; the credibility matrix is the rule's state."""
 
@@ -229,7 +293,7 @@ class DRCRSSG(Rule):
 
 
 BASELINES = {
-    "DGD": DGD, "LF": LF, "LF-Metropolis": LFMetropolis, "Su-Vaidya": SuVaidya, "Trimmed mean": TrimmedMean,
+    "DGD": DGD, "LF": LF, "LF-Metropolis": LFMetropolis, "Su-Vaidya": SuVaidya, "Trimmed mean": TrimmedMean, "IOS": IOS, "ClippedGossip": ClippedGossip,
     "Q-consensus": QConsensus,
     "Q-consensus (fixed beta)": lambda: QConsensus(beta1=0.0, name="Q-consensus (fixed beta)"),
     "DRC-RSSG": DRCRSSG,
@@ -366,7 +430,8 @@ def step(t, x, batch, rule, alpha, attack, astate):
     if attack is not None:
         av, astate = attack(t, x, vals, batch, astate)
         vals = torch.where(batch.from_adv, av, vals)
-    return torch.where(batch.reg, descend(rule, x, vals, batch, t, alpha(t), attack is not None), x), astate
+    lie = getattr(attack, "grads", None)
+    return torch.where(batch.reg, descend(rule, x, vals, batch, t, alpha(t), attack is not None, lie), x), astate
 
 
 def gradient_lie(x, g, vals, gvals, batch):
@@ -380,13 +445,15 @@ def gradient_lie(x, g, vals, gvals, batch):
     return torch.where(push > 0, gmin[..., None], torch.where(push < 0, gmax[..., None], g[..., None]))
 
 
-def descend(rule, x, vals, batch, t, at, attacked=True):
-    """New states of all nodes given the received values (regular rows are used)."""
+def descend(rule, x, vals, batch, t, at, attacked=True, lie=None):
+    """New states of all nodes given the received values (regular rows are used).
+    ``lie(x, g, vals, gvals, batch)``: fake gradients on adversary slots, for rules
+    that exchange gradients (default ``gradient_lie``)."""
     if getattr(rule, "exchanges_gradients", False):
         g = batch.grad(x)                                   # each node's gradient at its own state
         gvals = batch.gather(g)
         if attacked:
-            gvals = torch.where(batch.from_adv, gradient_lie(x, g, vals, gvals, batch), gvals)
+            gvals = torch.where(batch.from_adv, (lie or gradient_lie)(x, g, vals, gvals, batch), gvals)
         return rule.update(x, vals, g, gvals, batch, t, at)
     y = rule.aggregate(x, vals, batch, t, at)
     return y - at * batch.grad(x if rule.grad_at_own else y)
